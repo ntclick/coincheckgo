@@ -1,0 +1,54 @@
+{
+  "name": "unlimited-checkin-react-app",
+  "version": "1.0.0",
+  "description": "Unlimited Check-In React App - Simple & Clean",
+  "private": true,
+  "dependencies": {
+    "@zama-fhe/relayer-sdk": "^0.2.0",
+    "ethers": "^6.9.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.4.1",
+    "react-scripts": "5.0.1"
+  },
+  "devDependencies": {
+    "@craco/craco": "^7.1.0",
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "buffer": "^6.0.3",
+    "cross-env": "^7.0.3",
+    "crypto-browserify": "^3.12.1",
+    "express": "^5.1.0",
+    "hardhat": "^3.0.9",
+    "path-browserify": "^1.0.1",
+    "stream-browserify": "^3.0.0",
+    "typescript": "^4.9.5"
+  },
+  "scripts": {
+    "start": "cross-env PORT=4000 craco start",
+    "build": "craco build",
+    "test": "craco test",
+    "test:apis": "node scripts/test-env-and-apis.mjs",
+    "proxy:lunar": "node server/proxy-lunarcrush.mjs",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "type": "module"
+}

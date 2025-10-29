@@ -1,0 +1,1762 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Unlimited Check-In - Check in unlimited times with FHEVM"
+    />
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
+    <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
+    <title>Unlimited Check-In</title>
+    
+    <!-- Load FHEVM SDK ESM CDN -->
+    <script type="module">
+      try {
+        console.log('🔐 Loading FHEVM SDK ESM CDN...');
+        const { initSDK, createInstance, SepoliaConfig } = await import('https://cdn.zama.ai/relayer-sdk-js/0.2.0/relayer-sdk-js.js');
+        
+        // Make available globally
+        window.initSDK = initSDK;
+        window.createInstance = createInstance;
+        window.SepoliaConfig = SepoliaConfig;
+        
+        console.log('✅ FHEVM SDK ESM CDN loaded successfully');
+        console.log('window.initSDK:', typeof window.initSDK);
+        console.log('window.createInstance:', typeof window.createInstance);
+        console.log('window.SepoliaConfig:', typeof window.SepoliaConfig);
+      } catch (error) {
+        console.error('❌ FHEVM SDK ESM CDN failed:', error);
+      }
+    </script>
+    
+    <!-- Ethers.js for contract interaction -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    
+    
+    <!-- GM Token Swap Logic -->
+    <script>
+        // Contract addresses (LATEST deployment - 2025-10-26) - From deployment-hybrid.json
+        const TOKEN_ADDRESS = '0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08';
+        const SWAP_ADDRESS = '0x438A2ce1B563E71b68F2f0EE0575736CccF3231e';
+        const RESEARCH_AI_ADDRESS = '0x0f45E8Fd3BB3ef64D93741bC1F9cf9cB53675aB8'; // 50,000 GM funded
+
+    // Global variables
+    let provider, signer, userAddress, fhevm;
+    let eip712Signed = false; // Flag to prevent EIP-712 spam
+    let tokenContract, swapContract, researchAIContract;
+    let swapInProgress = false; // Flag to prevent double execution
+
+        // Research AI ABI (updated for FHE-compliant contract)
+        const RESEARCH_AI_ABI = [
+            "function dailyCheckIn() external",
+            "function performAIResearch(string memory topic) external",
+            "function fundPool(uint256 amount) external",
+            "function getPoolBalance() external view returns (uint256)",
+            "function hasCheckedInToday(address user) external view returns (bool)",
+            "function getResearchCount(address user) external view returns (uint256)",
+            "function owner() external view returns (address)",
+            "function gmToken() external view returns (address)",
+            "event DailyCheckIn(address indexed user, uint256 reward)",
+            "event AIResearch(address indexed user, string topic, uint256 cost)",
+            "event PoolFunded(address indexed funder, uint256 amount)"
+        ];
+
+        // Token ABI (from reference file - LATEST)
+        const TOKEN_ABI = [
+            "constructor(address,uint64,string,string,string)",
+            "function acceptOwnership()",
+            "function allowSwapAccess(bytes32)",
+            "function allowance(address,address) view returns (uint256)",
+            "function approve(address,uint256) returns (bool)",
+            "function authorizeSwapContract(address)",
+            "function balanceOf(address) view returns (uint256)",
+            "function confidentialBalanceOf(address) view returns (bytes32)",
+            "function confidentialBurn(address,bytes32,bytes) returns (bytes32)",
+            "function confidentialMint(address,bytes32,bytes) returns (bytes32)",
+            "function confidentialTotalSupply() view returns (bytes32)",
+            "function confidentialTransfer(address,bytes32,bytes) returns (bytes32)",
+            "function confidentialTransfer(address,bytes32) returns (bytes32)",
+            "function confidentialTransferAndCall(address,bytes32,bytes) returns (bytes32)",
+            "function confidentialTransferAndCall(address,bytes32,bytes,bytes) returns (bytes32)",
+            "function confidentialTransferFrom(address,address,bytes32,bytes) returns (bytes32)",
+            "function confidentialTransferFrom(address,address,bytes32) returns (bytes32)",
+            "function confidentialTransferFromAndCall(address,address,bytes32,bytes,bytes) returns (bytes32)",
+            "function confidentialTransferFromAndCall(address,address,bytes32,bytes) returns (bytes32)",
+            "function decimals() view returns (uint8)",
+            "function discloseEncryptedAmount(bytes32)",
+            "function finalizeDiscloseEncryptedAmount(uint256,uint64,bytes[])",
+            "function isAuthorizedMinter(address) view returns (bool)",
+            "function isOperator(address,address) view returns (bool)",
+            "function mint(address,uint256)",
+            "function mintPublicForSwap(address,uint256)",
+            "function name() view returns (string)",
+            "function owner() view returns (address)",
+            "function pendingOwner() view returns (address)",
+            "function protocolId() pure returns (uint256)",
+            "function publicBalances(address) view returns (uint256)",
+            "function renounceOwnership()",
+            "function setOperator(address,uint48)",
+            "function setOperatorForSwap(address,uint48)",
+            "function symbol() view returns (string)",
+            "function tokenURI() view returns (string)",
+            "function totalPublicSupply() view returns (uint256)",
+            "function totalSupply() view returns (uint256)",
+            "function transfer(address,uint256) returns (bool)",
+            "function transferFrom(address,address,uint256) returns (bool)",
+            "function transferOwnership(address)"
+        ];
+
+        // Swap ABI (from reference file - LATEST)
+        const SWAP_ABI = [
+            "constructor(address)",
+            "event EncryptedSwap(address indexed,bool,bytes32)",
+            "event LiquidityAdded(address indexed,uint256,uint256)",
+            "event OwnershipTransferStarted(address indexed,address indexed)",
+            "event OwnershipTransferred(address indexed,address indexed)",
+            "event PoolInitialized(uint256,uint256)",
+            "event PublicSwap(address indexed,bool,uint256)",
+            "event SwapDebug(string,uint256)",
+            "function FEE_DENOMINATOR() view returns (uint256)",
+            "function SWAP_FEE() view returns (uint256)",
+            "function acceptOwnership()",
+            "function addLiquidity(uint256) payable",
+            "function getPoolState() view returns (bool,uint256,uint256)",
+            "function getReserves() view returns (uint256,uint256)",
+            "function getSwapFee() pure returns (uint256)",
+            "function initializePool(uint256) payable",
+            "function mintGMTokensToPool(uint256)",
+            "function owner() view returns (address)",
+            "function pendingOwner() view returns (address)",
+            "function poolInitialized() view returns (bool)",
+            "function protocolId() pure returns (uint256)",
+            "function renounceOwnership()",
+            "function setSwapAsOperator()",
+            "function swapETHForGM() payable",
+            "function swapETHForGMPublic() payable",
+            "function swapGMForETH(bytes32,bytes) payable",
+            "function swapGMForETHPublic(uint256)",
+            "function totalETHReserve() view returns (uint256)",
+            "function totalGMReserve() view returns (uint256)",
+            "function transferOwnership(address)",
+            "function withdraw(uint256,uint256)"
+        ];
+
+        // Helper function to convert array/Uint8Array to hex string
+        function arrayToHex(array) {
+            if (typeof array === 'string') {
+                return array;
+            }
+            if (Array.isArray(array) || array instanceof Uint8Array) {
+                const hexString = "0x" + Array.from(array).map(b => {
+                    const hex = b.toString(16);
+                    return hex.length === 1 ? "0" + hex : hex;
+                }).join("");
+                return hexString;
+            }
+            return array;
+        }
+
+        // Auto-sync functions for fixed exchange rate (0.001 ETH = 100 GM)
+        window.syncGMAmount = function syncGMAmount() {
+            const ethAmount = parseFloat(document.getElementById('ethAmount')?.value || '0.001');
+            if (!isNaN(ethAmount) && ethAmount > 0) {
+                const gmAmount = Math.round(ethAmount * 100000); // 0.001 ETH = 100 GM
+                const gmInput = document.getElementById('gmAmount');
+                if (gmInput) {
+                    gmInput.value = gmAmount;
+                }
+                console.log(`🔄 Auto-sync: ${ethAmount} ETH = ${gmAmount} GM`);
+            }
+        };
+
+        window.syncETHAmount = function syncETHAmount() {
+            const gmAmount = parseFloat(document.getElementById('gmAmount')?.value || '100');
+            if (!isNaN(gmAmount) && gmAmount > 0) {
+                const ethAmount = (gmAmount / 100000).toFixed(6); // 100 GM = 0.001 ETH
+                const ethInput = document.getElementById('ethAmount');
+                if (ethInput) {
+                    ethInput.value = ethAmount;
+                }
+                console.log(`🔄 Auto-sync: ${gmAmount} GM = ${ethAmount} ETH`);
+            }
+        };
+
+        // Initialize contracts and wallet (using React app's connection)
+        async function initializeSwap() {
+            try {
+                if (typeof window.ethereum === 'undefined') {
+                    throw new Error('MetaMask not installed');
+                }
+
+                // Use React app's wallet connection if available
+                if (window.ethereum.selectedAddress) {
+                    console.log('✅ Using React app wallet connection:', window.ethereum.selectedAddress);
+                    userAddress = window.ethereum.selectedAddress;
+                    
+                    // Create provider and signer using React app's connection
+                    provider = new ethers.providers.Web3Provider(window.ethereum);
+                    signer = provider.getSigner();
+                    
+                    // Initialize contracts immediately when React app connects
+                    tokenContract = new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, signer);
+                    swapContract = new ethers.Contract(SWAP_ADDRESS, SWAP_ABI, signer);
+                    researchAIContract = new ethers.Contract(RESEARCH_AI_ADDRESS, RESEARCH_AI_ABI, signer);
+                    
+                    console.log('✅ Contracts auto-initialized for React app connection');
+                    
+                    // 🔧 CRITICAL: Use React app's FHEVM instance if available
+                    if (window.fhevm) {
+                        console.log('✅ Using React app FHEVM instance for decryption');
+                        // The React app's FHEVM instance is already set up with the correct provider
+                    } else {
+                        console.log('⚠️ React app FHEVM not available yet, will retry later');
+                        // Set a flag to retry FHEVM initialization later
+                        window.retryFHEVMInit = true;
+                    }
+                } else {
+                    // Fallback: request connection
+                    console.log('🔄 Requesting wallet connection...');
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    provider = new ethers.providers.Web3Provider(window.ethereum);
+                    signer = provider.getSigner();
+                    userAddress = await signer.getAddress();
+                }
+
+                // Initialize contracts
+                tokenContract = new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, signer);
+                swapContract = new ethers.Contract(SWAP_ADDRESS, SWAP_ABI, signer);
+                researchAIContract = new ethers.Contract(RESEARCH_AI_ADDRESS, RESEARCH_AI_ABI, signer);
+
+                console.log('✅ Wallet connected:', userAddress);
+                console.log('✅ Contracts initialized:');
+                console.log('   • Token:', TOKEN_ADDRESS);
+                console.log('   • Swap:', SWAP_ADDRESS);
+                console.log('   • Research AI:', RESEARCH_AI_ADDRESS);
+
+                // Use React app's FHEVM instance
+                if (window.fhevm) {
+                    console.log('✅ Using React app FHEVM instance');
+                } else {
+                    console.log('⚠️ React app FHEVM not available yet');
+                }
+
+                // Auto-load token balances
+                await loadTokenBalances();
+
+                return true;
+            } catch (error) {
+                console.error('❌ Initialization failed:', error.message);
+                return false;
+            }
+        }
+
+        // Load GM tokens in wallet
+        async function loadGMTokens(amount = 1000) {
+            try {
+                if (!tokenContract) {
+                    throw new Error('Contract not initialized');
+                }
+
+                console.log(`🪙 Minting ${amount} GM tokens to wallet...`);
+                const tx = await tokenContract.mint(userAddress, ethers.utils.parseEther(amount.toString()));
+                await tx.wait();
+                console.log('✅ GM tokens minted successfully');
+
+                // Refresh token balances UI
+                await loadTokenBalances();
+                return true;
+            } catch (error) {
+                console.error('❌ Load GM tokens failed:', error.message);
+                return false;
+            }
+        }
+
+        // Swap ETH → GM (Public)
+        async function swapETHForGM(ethAmount = "0.001") {
+            try {
+                if (!swapContract) {
+                    throw new Error('Contract not initialized');
+                }
+
+                const ethAmountWei = ethers.utils.parseEther(ethAmount);
+                console.log(`💱 Swapping ${ethAmount} ETH for GM...`);
+
+                // Check if pool is initialized
+                const isInitialized = await swapContract.poolInitialized();
+                if (!isInitialized) {
+                    console.log('⚠️ Pool not initialized. Auto-initializing...');
+                    
+                    // Auto-mint GM tokens for pool
+                    await loadGMTokens(10000);
+                    
+                    // Approve swap contract
+                    await tokenContract.approve(SWAP_ADDRESS, ethers.utils.parseEther("10000"));
+                    
+                    // Initialize pool
+                    const initTx = await swapContract.initializePool(ethers.utils.parseEther("10000"), { value: ethAmountWei });
+                    await initTx.wait();
+                    console.log('✅ Pool initialized');
+                }
+
+                // Execute swap
+                const swapTx = await swapContract.swapETHForGMPublic({ value: ethAmountWei });
+                await swapTx.wait();
+                console.log('✅ ETH → GM swap successful');
+
+                // Check new balance
+                const balance = await tokenContract.balanceOf(userAddress);
+                console.log(`💰 New GM Balance: ${ethers.utils.formatEther(balance)} GM`);
+                return true;
+            } catch (error) {
+                console.error('❌ ETH → GM swap failed:', error.message);
+                return false;
+            }
+        }
+
+        // Swap GM → ETH (FHE Confidential) - Using React app's FHEVM instance
+        async function swapGMForETH(gmAmount = 100) {
+            try {
+                // Prevent double execution
+                if (swapInProgress) {
+                    console.log('⚠️ Swap already in progress, ignoring duplicate call');
+                    return;
+                }
+                swapInProgress = true;
+                
+                if (!swapContract || !tokenContract) {
+                    throw new Error('Contracts not initialized');
+                }
+
+                console.log(`🔐 Swapping ${gmAmount} GM for ETH (FHE Confidential)...`);
+                console.log(`🔍 Debug - gmAmount type: ${typeof gmAmount}, value: ${gmAmount}`);
+                
+                // Use React app's FHEVM instance for encrypted input
+                if (!window.fhevm) {
+                    throw new Error('FHEVM not available for confidential swap');
+                }
+
+                // Check user balance
+                const userBalance = await tokenContract.balanceOf(userAddress);
+                if (userBalance.lt(ethers.utils.parseEther(gmAmount.toString()))) {
+                    console.log('⚠️ Insufficient GM balance. Auto-minting...');
+                    await loadGMTokens(10000);
+                }
+
+                // Use React app's FHEVM instance if available
+                let fhevmInstance = null;
+                if (window.fhevm && window.fhevm.createEncryptedInput) {
+                    fhevmInstance = window.fhevm;
+                    console.log('✅ Using React app FHEVM instance');
+                } else {
+                    throw new Error('FHEVM not available from React app');
+                }
+
+                // Create encrypted input for GM amount
+                const contractAddress = ethers.utils.getAddress(SWAP_ADDRESS);
+                const userAddressChecksum = ethers.utils.getAddress(userAddress);
+                
+                const input = fhevmInstance.createEncryptedInput(contractAddress, userAddressChecksum);
+                input.add64(BigInt(gmAmount));
+                const encrypted = await input.encrypt();
+
+                const handleHex = arrayToHex(encrypted.handles[0]);
+                console.log(`🔒 Encrypted handle: ${handleHex}`);
+
+                // For hybrid token, confidential swap still needs approval for public balance
+                console.log('🔐 Hybrid token: confidential swap needs approval for public balance');
+                
+                // Check allowance
+                const allowance = await tokenContract.allowance(userAddress, SWAP_ADDRESS);
+                const allowanceFormatted = ethers.utils.formatEther(allowance);
+                console.log(`🔐 Current allowance: ${allowanceFormatted} GM`);
+                
+                // Approve if needed
+                if (parseFloat(allowanceFormatted) < gmAmount) {
+                    console.log(`🔐 Approving ${gmAmount} GM for confidential swap...`);
+                    
+                    // Validate gmAmount to prevent extremely large approvals
+                    if (gmAmount > 1000000) {
+                        throw new Error(`GM amount too large: ${gmAmount}. Maximum allowed: 1,000,000 GM`);
+                    }
+                    
+                    const approvalAmount = ethers.utils.parseEther(gmAmount.toString());
+                    console.log(`🔍 Debug - Approval amount in Wei: ${approvalAmount.toString()}`);
+                    console.log(`🔍 Debug - Approval amount formatted: ${ethers.utils.formatEther(approvalAmount)} GM`);
+                    
+                    // Double check the approval amount is reasonable
+                    const approvalFormatted = ethers.utils.formatEther(approvalAmount);
+                    if (parseFloat(approvalFormatted) > 1000000) {
+                        throw new Error(`Approval amount too large: ${approvalFormatted} GM. This seems like a bug.`);
+                    }
+                    
+                    const approveTx = await tokenContract.approve(SWAP_ADDRESS, approvalAmount);
+                    await approveTx.wait();
+                    console.log('✅ Approval successful for confidential swap');
+                }
+
+                // Execute confidential swap
+                const swapTx = await swapContract.swapGMForETH(handleHex, encrypted.inputProof);
+                await swapTx.wait();
+                console.log('✅ GM → ETH confidential swap successful');
+
+                // Refresh balances
+                await loadTokenBalances();
+                return true;
+            } catch (error) {
+                console.error('❌ GM → ETH swap failed:', error.message);
+                return false;
+            } finally {
+                // Reset flag to allow future swaps
+                swapInProgress = false;
+            }
+        }
+
+        // Load token balances and update UI - Enhanced with real wallet data
+        async function loadTokenBalances() {
+            try {
+                if (!tokenContract || !provider) {
+                    throw new Error('Contracts not initialized');
+                }
+
+                console.log('💰 Loading token balances from wallet...');
+
+                // Get ETH balance
+                const ethBalance = await provider.getBalance(userAddress);
+                const ethBalanceFormatted = parseFloat(ethers.utils.formatEther(ethBalance)).toFixed(4);
+                console.log(`💰 ETH Balance: ${ethBalanceFormatted} ETH`);
+
+                // Get GM token balance (public)
+                let gmBalanceFormatted = '0.00';
+                let publicBalanceFormatted = '0.00';
+                let confidentialBalanceFormatted = '0.00';
+
+                try {
+                    // Try to get public balance first
+                    const publicBalance = await tokenContract.publicBalances(userAddress);
+                    publicBalanceFormatted = parseFloat(ethers.utils.formatEther(publicBalance)).toFixed(2);
+                    console.log(`📊 Public Balance: ${publicBalanceFormatted} GM`);
+
+                    // Try to get regular balance
+                    const gmBalance = await tokenContract.balanceOf(userAddress);
+                    gmBalanceFormatted = parseFloat(ethers.utils.formatEther(gmBalance)).toFixed(2);
+                    console.log(`🪙 GM Balance: ${gmBalanceFormatted} GM`);
+
+                    // Try to get confidential balance (encrypted)
+                    try {
+                        const confidentialBalance = await tokenContract.confidentialBalanceOf(userAddress);
+                        console.log(`🔐 Confidential Balance (encrypted): ${confidentialBalance}`);
+                        
+                        // Check if balance is not zero
+                        if (confidentialBalance !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+                            console.log('🔐 User has confidential GM tokens');
+                            
+                            // Try to decrypt if FHEVM is available, wallet is connected, and not already signed
+                            // Only auto-decrypt if user has explicitly requested it or wallet just connected
+                            if (window.fhevm && window.fhevm.userDecrypt && !eip712Signed && userAddress && (window.userRequestedDecryption || window.walletJustConnected)) {
+                                try {
+                                    console.log('🔓 Attempting to decrypt confidential balance...');
+                                    console.log('🔐 This will require EIP-712 signature from MetaMask...');
+                                    
+                                    // Create handle contract pairs for decryption
+                                    const handleContractPairs = [{
+                                        handle: confidentialBalance,
+                                        contractAddress: TOKEN_ADDRESS,
+                                    }];
+
+                                    // Generate keypair for decryption
+                                    const keypair = window.fhevm.generateKeypair();
+                                    console.log('✅ Keypair generated for decryption');
+
+                                    // Create EIP-712 signature for decryption
+                                    const startTimeStamp = Math.floor(Date.now() / 1000).toString();
+                                    const durationDays = "1";
+                                    const contractAddresses = [TOKEN_ADDRESS];
+
+                                    const eip712 = window.fhevm.createEIP712(
+                                        keypair.publicKey,
+                                        contractAddresses,
+                                        startTimeStamp,
+                                        durationDays,
+                                    );
+
+                                    console.log('🔐 Creating EIP-712 signature for decryption...');
+                                    console.log('🔐 MetaMask will show signature popup...');
+                                    
+                                    // Auto-trigger EIP-712 signature for decryption after wallet connection
+                                    console.log('🔐 Auto-triggering EIP-712 signature for decryption...');
+                                    console.log('🔐 MetaMask will show signature popup for decryption...');
+
+                                    // Create EIP-712 signature for decryption
+                                    const signature = await window.fhevm.createEIP712(
+                                        ethers.utils.getAddress(userAddress),
+                                        contractAddresses,
+                                        startTimeStamp,
+                                        durationDays
+                                    );
+                                    
+                                    console.log('✅ EIP-712 signature created for decryption');
+                                    eip712Signed = true; // Mark as signed to prevent spam
+
+                                    // Decrypt the balance
+                                    try {
+                                        const result = await window.fhevm.userDecrypt(
+                                            handleContractPairs,
+                                            keypair.privateKey,
+                                            keypair.publicKey,
+                                            signature && typeof signature === 'string' ? signature.replace("0x", "") : (signature || ""),
+                                            contractAddresses,
+                                            ethers.utils.getAddress(userAddress),
+                                            startTimeStamp,
+                                            durationDays,
+                                        );
+                                        
+                                        console.log('✅ Confidential balance decrypted:', result);
+                                        console.log('🔍 Result structure:', JSON.stringify(result, (key, value) => 
+                                            typeof value === 'bigint' ? value.toString() : value, 2));
+                                        
+                                        // Try different ways to access the decrypted balance
+                                        let decryptedBalance = null;
+                                        if (result && result[0] && result[0].balance) {
+                                            decryptedBalance = ethers.utils.formatEther(result[0].balance);
+                                        } else if (result && result[0] && typeof result[0] === 'object') {
+                                            // Try to find balance in the object
+                                            const balanceKey = Object.keys(result[0]).find(key => key.includes('balance') || key.includes('amount'));
+                                            if (balanceKey && result[0][balanceKey]) {
+                                                decryptedBalance = ethers.utils.formatEther(result[0][balanceKey]);
+                                            }
+                                        } else if (result && typeof result === 'object') {
+                                            // Try to find balance in the result object directly
+                                            const balanceKey = Object.keys(result).find(key => key.includes('balance') || key.includes('amount'));
+                                            if (balanceKey && result[balanceKey]) {
+                                                decryptedBalance = ethers.utils.formatEther(result[balanceKey]);
+                                            } else {
+                                                // Try to find any BigInt value in the result object
+                                                const bigIntKey = Object.keys(result).find(key => typeof result[key] === 'bigint');
+                                                if (bigIntKey && result[bigIntKey]) {
+                                                    decryptedBalance = ethers.utils.formatEther(result[bigIntKey]);
+                                                } else {
+                                                    // Try to find any numeric value (including string "0")
+                                                    const numericKey = Object.keys(result).find(key => 
+                                                        typeof result[key] === 'bigint' || 
+                                                        (typeof result[key] === 'string' && !isNaN(parseFloat(result[key])))
+                                                    );
+                                                    if (numericKey && result[numericKey]) {
+                                                        const value = typeof result[numericKey] === 'bigint' ? result[numericKey] : BigInt(result[numericKey]);
+                                                        decryptedBalance = ethers.utils.formatEther(value);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        if (decryptedBalance) {
+                                            console.log(`💰 Decrypted GM Balance: ${decryptedBalance} GM`);
+                                            updateTokenBalancesUI(null, null, null, decryptedBalance);
+                                        } else {
+                                            console.log('⚠️ No decrypted balance found in result');
+                                            updateTokenBalancesUI(null, null, null, '0.00');
+                                        }
+                                        
+                                        // Reset flags after successful decryption
+                                        window.walletJustConnected = false;
+                                        window.userRequestedDecryption = false;
+                                    } catch (decryptError) {
+                                        console.log('⚠️ Decryption failed, using public balance:', decryptError.message);
+                                        // Check if it's a relayer error
+                                        if (decryptError.message.includes('relayer respond with HTTP code 500')) {
+                                            console.log('🔧 Relayer error detected - this is expected in development');
+                                            console.log('💡 Confidential balance exists but cannot be decrypted due to relayer issues');
+                                        }
+                                        // Update UI with public balance
+                                        updateTokenBalancesUI(null, null, null, '0.00');
+                                    }
+                                } catch (decryptError) {
+                                    console.log('⚠️ Decryption failed, using public balance:', decryptError.message);
+                                    // Update UI with public balance
+                                    updateTokenBalancesUI(null, null, null, '0.00');
+                                }
+                            } else {
+                                console.log('⚠️ FHEVM not available for decryption');
+                            }
+                        } else {
+                            console.log('ℹ️ No confidential balance found');
+                        }
+                    } catch (confidentialError) {
+                        console.log('⚠️ Could not get confidential balance:', confidentialError.message);
+                    }
+
+                } catch (balanceError) {
+                    console.log('⚠️ Could not get GM token balance:', balanceError.message);
+                }
+
+                // Update UI with real data
+                updateTokenBalancesUI({
+                    ethBalance: ethBalanceFormatted,
+                    gmBalance: gmBalanceFormatted,
+                    publicBalance: publicBalanceFormatted,
+                    confidentialBalance: confidentialBalanceFormatted
+                });
+
+                return {
+                    ethBalance: ethBalanceFormatted,
+                    gmBalance: gmBalanceFormatted,
+                    publicBalance: publicBalanceFormatted,
+                    confidentialBalance: confidentialBalanceFormatted
+                };
+            } catch (error) {
+                console.error('❌ Load token balances failed:', error.message);
+                return false;
+            }
+        }
+
+        // Update token balances UI with enhanced information
+        function updateTokenBalancesUI(balances) {
+            try {
+                // Show the UI
+                const tokenBalancesDiv = document.getElementById('tokenBalances');
+                if (tokenBalancesDiv) {
+                    tokenBalancesDiv.style.display = 'block';
+                }
+
+                // If balances is null or undefined, return early
+                if (!balances) {
+                    console.log('⚠️ No balance data provided to updateTokenBalancesUI');
+                    return;
+                }
+
+                // Update ETH balance
+                const ethBalanceElement = document.getElementById('ethBalance');
+                if (ethBalanceElement) {
+                    ethBalanceElement.textContent = `${balances.ethBalance} ETH`;
+                }
+
+                // Update GM balance (use confidential if available, otherwise public)
+                const gmBalanceElement = document.getElementById('gmBalance');
+                if (gmBalanceElement) {
+                    const displayBalance = balances.confidentialBalance && parseFloat(balances.confidentialBalance) > 0 
+                        ? balances.confidentialBalance 
+                        : balances.gmBalance;
+                    gmBalanceElement.textContent = `${displayBalance} GM`;
+                }
+
+                // Update GM balance info with detailed breakdown
+                const gmBalanceInfoElement = document.getElementById('gmBalanceInfo');
+                if (gmBalanceInfoElement) {
+                    let infoText = '';
+                    
+                    if (balances.confidentialBalance && parseFloat(balances.confidentialBalance) > 0) {
+                        infoText = `🔐 FHE: ${balances.confidentialBalance} GM`;
+                        if (balances.publicBalance && parseFloat(balances.publicBalance) > 0) {
+                            infoText += ` | 📊 Public: ${balances.publicBalance} GM`;
+                        }
+                    } else if (balances.publicBalance && parseFloat(balances.publicBalance) > 0) {
+                        infoText = `📊 Public: ${balances.publicBalance} GM`;
+                    } else {
+                        infoText = `ℹ️ Balance: ${balances.gmBalance} GM`;
+                    }
+                    
+                    gmBalanceInfoElement.textContent = infoText;
+                }
+
+                console.log('✅ Token balances UI updated with real wallet data');
+                console.log('📊 Balance breakdown:', {
+                    eth: balances.ethBalance,
+                    gm: balances.gmBalance,
+                    public: balances.publicBalance,
+                    confidential: balances.confidentialBalance
+                });
+                
+                // Trigger React component update by dispatching custom event
+                window.dispatchEvent(new CustomEvent('tokenBalancesUpdated', {
+                    detail: {
+                        eth: balances.ethBalance,
+                        gm: balances.gmBalance,
+                        public: balances.publicBalance,
+                        confidential: balances.confidentialBalance
+                    }
+                }));
+            } catch (error) {
+                console.error('❌ Update UI failed:', error.message);
+            }
+        }
+
+        // Check pool status
+        async function checkPoolStatus() {
+            try {
+                if (!swapContract) {
+                    throw new Error('Contract not initialized');
+                }
+
+                const poolInitialized = await swapContract.poolInitialized();
+                const reserves = await swapContract.getReserves();
+                const userBalance = await tokenContract.balanceOf(userAddress);
+
+                console.log('📊 Pool Status:');
+                console.log(`   • Pool initialized: ${poolInitialized}`);
+                console.log(`   • ETH Reserve: ${ethers.utils.formatEther(reserves[0])}`);
+                console.log(`   • GM Reserve: ${ethers.utils.formatEther(reserves[1])}`);
+                console.log(`   • Your GM Balance: ${ethers.utils.formatEther(userBalance)} GM`);
+                return true;
+            } catch (error) {
+                console.error('❌ Pool status check failed:', error.message);
+                return false;
+            }
+        }
+
+        // Check if React app FHEVM is available
+        function checkReactFHEVM() {
+            if (window.fhevm && window.fhevm.createEncryptedInput) {
+                console.log('✅ React app FHEVM instance available');
+                return true;
+            } else {
+                console.log('⚠️ React app FHEVM instance not available yet');
+                return false;
+            }
+        }
+
+        // Wait for React app FHEVM to be ready
+        async function waitForReactFHEVM() {
+            let attempts = 0;
+            const maxAttempts = 30; // 30 seconds max wait
+            
+            while (attempts < maxAttempts) {
+                if (checkReactFHEVM()) {
+                    return true;
+                }
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                attempts++;
+            }
+            
+            console.log('⚠️ React app FHEVM not ready after 30 seconds');
+            return false;
+        }
+
+        // Force decrypt confidential balance with EIP-712 signature
+        async function forceDecryptConfidentialBalance() {
+            try {
+                if (!tokenContract || !userAddress) {
+                    throw new Error('Contracts not initialized or wallet not connected');
+                }
+                
+                // Set flag to allow decryption
+                window.userRequestedDecryption = true;
+                
+                // Use React app's FHEVM instance
+                const fhevmInstance = window.fhevm;
+                if (!fhevmInstance) {
+                    console.log('⚠️ FHEVM not available for decryption');
+                    return;
+                }
+
+                console.log('🔐 Force decrypting confidential balance using React app FHEVM...');
+                
+                // Get confidential balance
+                const confidentialBalance = await tokenContract.confidentialBalanceOf(userAddress);
+                console.log(`🔐 Confidential balance: ${confidentialBalance}`);
+                
+                if (confidentialBalance === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+                    console.log('ℹ️ No confidential balance to decrypt');
+                    return false;
+                }
+
+                // Always trigger EIP-712 signature for decryption
+                console.log('🔐 Triggering EIP-712 signature for decryption...');
+
+                // Create handle contract pairs for decryption
+                const handleContractPairs = [{
+                    handle: confidentialBalance,
+                    contractAddress: TOKEN_ADDRESS,
+                }];
+
+                // Generate keypair for decryption using React app's FHEVM
+                const keypair = fhevmInstance.generateKeypair();
+                console.log('✅ Keypair generated for decryption');
+
+                // Create EIP-712 signature for decryption
+                const startTimeStamp = Math.floor(Date.now() / 1000).toString();
+                const durationDays = "1";
+                const contractAddresses = [TOKEN_ADDRESS];
+
+                const eip712 = fhevmInstance.createEIP712(
+                    keypair.publicKey,
+                    contractAddresses,
+                    startTimeStamp,
+                    durationDays,
+                );
+
+                console.log('🔐 Creating EIP-712 signature for decryption...');
+                console.log('🔐 MetaMask will show signature popup...');
+                
+                // Only proceed if user explicitly requested decryption
+                if (!window.userRequestedDecryption) {
+                    console.log('ℹ️ Decryption not explicitly requested by user, skipping...');
+                    return false;
+                }
+                
+                const signature = await window.ethereum.request({
+                    method: 'eth_signTypedData_v4',
+                    params: [ethers.utils.getAddress(userAddress), JSON.stringify(eip712)],
+                });
+
+                console.log('✅ EIP-712 signature created for decryption');
+                eip712Signed = true; // Mark as signed to prevent spam
+
+                // Decrypt the balance using React app's FHEVM instance
+                const result = await fhevmInstance.userDecrypt(
+                    handleContractPairs,
+                    keypair.privateKey,
+                    keypair.publicKey,
+                    signature && typeof signature === 'string' ? signature.replace("0x", "") : (signature || ""),
+                    contractAddresses,
+                    ethers.utils.getAddress(userAddress),
+                    startTimeStamp,
+                    durationDays,
+                );
+
+                console.log('✅ Confidential balance decrypted:', result);
+                console.log('🔍 Result structure:', JSON.stringify(result, (key, value) => 
+                    typeof value === 'bigint' ? value.toString() : value, 2));
+                
+                // Try different ways to access the decrypted balance
+                let decryptedBalance = null;
+                if (result && result[0] && result[0].balance) {
+                    decryptedBalance = ethers.utils.formatEther(result[0].balance);
+                } else if (result && result[0] && typeof result[0] === 'object') {
+                    // Try to find balance in the object
+                    const balanceKey = Object.keys(result[0]).find(key => key.includes('balance') || key.includes('amount'));
+                    if (balanceKey && result[0][balanceKey]) {
+                        decryptedBalance = ethers.utils.formatEther(result[0][balanceKey]);
+                    }
+                } else if (result && typeof result === 'object') {
+                    // Try to find balance in the result object directly
+                    const balanceKey = Object.keys(result).find(key => key.includes('balance') || key.includes('amount'));
+                    if (balanceKey && result[balanceKey]) {
+                        decryptedBalance = ethers.utils.formatEther(result[balanceKey]);
+                    } else {
+                        // Try to find any BigInt value in the result object
+                        const bigIntKey = Object.keys(result).find(key => typeof result[key] === 'bigint');
+                        if (bigIntKey && result[bigIntKey]) {
+                            decryptedBalance = ethers.utils.formatEther(result[bigIntKey]);
+                        } else {
+                            // Try to find any numeric value (including string "0")
+                            const numericKey = Object.keys(result).find(key => 
+                                typeof result[key] === 'bigint' || 
+                                (typeof result[key] === 'string' && !isNaN(parseFloat(result[key])))
+                            );
+                            if (numericKey && result[numericKey]) {
+                                const value = typeof result[numericKey] === 'bigint' ? result[numericKey] : BigInt(result[numericKey]);
+                                decryptedBalance = ethers.utils.formatEther(value);
+                            }
+                        }
+                    }
+                }
+                
+                if (decryptedBalance) {
+                    console.log(`💰 Decrypted GM Balance: ${decryptedBalance} GM`);
+                    updateTokenBalancesUI(null, null, null, decryptedBalance);
+                } else {
+                    console.log('⚠️ No decrypted balance found in result');
+                    updateTokenBalancesUI(null, null, null, '0.00');
+                }
+                return true;
+            } catch (error) {
+                console.error('❌ Force decrypt failed:', error.message);
+                return false;
+            }
+        }
+
+        // Auto-refresh balances when wallet connects
+        function setupWalletListeners() {
+            if (typeof window.ethereum !== 'undefined') {
+                // Listen for account changes
+                window.ethereum.on('accountsChanged', async (accounts) => {
+                    if (accounts.length > 0) {
+                        console.log('🔄 Wallet account changed, refreshing balances...');
+                        setTimeout(async () => {
+                            await loadTokenBalances();
+                        }, 1000);
+                    }
+                });
+
+                // Listen for network changes
+                window.ethereum.on('chainChanged', async (chainId) => {
+                    console.log('🔄 Network changed, refreshing balances...');
+                    setTimeout(async () => {
+                        await loadTokenBalances();
+                    }, 1000);
+                });
+            }
+        }
+
+        // Manual trigger for initialization (for debugging)
+        window.manualInitialize = async function() {
+            console.log('🔄 Manual initialization triggered...');
+            try {
+                await initializeSwap();
+                console.log('✅ Manual initialization completed');
+            } catch (error) {
+                console.error('❌ Manual initialization failed:', error.message);
+            }
+        };
+
+        // Retry FHEVM initialization when it becomes available
+        window.retryFHEVMInitialization = async function() {
+            if (window.retryFHEVMInit && window.fhevm && userAddress) {
+                console.log('🔄 Retrying FHEVM initialization...');
+                try {
+                    // Check if user has confidential balance first and wallet is connected
+                    if (tokenContract && userAddress) {
+                        const confidentialBalance = await tokenContract.confidentialBalanceOf(userAddress);
+                        console.log(`🔐 Checking confidential balance: ${confidentialBalance}`);
+                        
+                        if (confidentialBalance !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+                            if (!eip712Signed) {
+                                console.log('🔐 User has confidential balance, triggering EIP-712 signature...');
+                                // Force decrypt confidential balance now that FHEVM is available
+                                await forceDecryptConfidentialBalance();
+                                console.log('✅ FHEVM retry initialization completed');
+                            } else {
+                                console.log('ℹ️ EIP-712 already signed in this session, skipping re-sign.');
+                            }
+                        } else {
+                            console.log('ℹ️ No confidential balance to decrypt');
+                        }
+                    }
+                    window.retryFHEVMInit = false; // Stop retrying after this attempt
+                } catch (error) {
+                    console.log('⚠️ FHEVM retry failed:', error.message);
+                    window.retryFHEVMInit = false; // Stop retrying even on error
+                }
+            }
+        };
+
+        // Force EIP-712 signature for testing (even without confidential balance)
+        window.forceEIP712Signature = async function() {
+            try {
+                if (!window.fhevm || !userAddress) {
+                    throw new Error('FHEVM not available or wallet not connected');
+                }
+                
+                console.log('🔐 Force triggering EIP-712 signature for testing...');
+                window.userRequestedDecryption = true; // Mark as user requested
+                eip712Signed = false; // Reset flag to allow force signing
+                
+                // Generate keypair for decryption
+                const keypair = window.fhevm.generateKeypair();
+                console.log('✅ Keypair generated for EIP-712 signature');
+                
+                // Create EIP-712 signature for decryption
+                const startTimeStamp = Math.floor(Date.now() / 1000).toString();
+                const durationDays = "1";
+                const contractAddresses = [TOKEN_ADDRESS];
+                
+                const eip712 = window.fhevm.createEIP712(
+                    keypair.publicKey,
+                    contractAddresses,
+                    startTimeStamp,
+                    durationDays,
+                );
+                
+                console.log('🔐 Creating EIP-712 signature for testing...');
+                console.log('🔐 MetaMask will show signature popup...');
+                
+                const signature = await window.ethereum.request({
+                    method: 'eth_signTypedData_v4',
+                    params: [ethers.utils.getAddress(userAddress), JSON.stringify(eip712)],
+                });
+                
+                console.log('✅ EIP-712 signature created for testing:', signature);
+                console.log('🎉 EIP-712 signature test completed successfully!');
+                eip712Signed = true; // Mark as signed to prevent spam
+                
+                return signature;
+            } catch (error) {
+                console.error('❌ Force EIP-712 signature failed:', error.message);
+                throw error;
+            }
+        };
+
+        // Make functions globally available
+        // Initialize pool function
+        window.initializePool = async function initializePool() {
+            try {
+                if (!swapContract || !tokenContract) {
+                    throw new Error('Contracts not initialized');
+                }
+                
+                console.log('🏊 Initializing pool...');
+                
+                // Check if pool is already initialized
+                const isInitialized = await swapContract.poolInitialized();
+                if (isInitialized) {
+                    console.log('✅ Pool already initialized');
+                    return;
+                }
+                
+                // Initialize pool with some GM tokens and ETH
+                const gmAmount = ethers.utils.parseEther("10000"); // 10,000 GM
+                const ethAmount = ethers.utils.parseEther("0.01"); // 0.01 ETH
+                
+                // Mint GM tokens to user first
+                console.log('🪙 Minting GM tokens for pool initialization...');
+                const mintTx = await tokenContract.mint(userAddress, gmAmount);
+                await mintTx.wait();
+                console.log('✅ Minted GM tokens');
+                
+                // Approve swap contract to spend GM tokens
+                console.log('🔑 Approving swap contract...');
+                const approveTx = await tokenContract.approve(SWAP_ADDRESS, gmAmount);
+                await approveTx.wait();
+                console.log('✅ Approved swap contract');
+                
+                // Initialize pool
+                console.log('🏊 Initializing pool with GM and ETH...');
+                const initTx = await swapContract.initializePool(gmAmount, { value: ethAmount });
+                await initTx.wait();
+                console.log('✅ Pool initialized successfully!');
+                
+                // Refresh balances
+                await loadTokenBalances();
+                
+            } catch (error) {
+                console.error('❌ Pool initialization failed:', error);
+                throw error;
+            }
+        };
+
+        window.initializeSwap = initializeSwap;
+        window.loadGMTokens = loadGMTokens;
+        window.loadTokenBalances = loadTokenBalances;
+        window.swapETHForGM = swapETHForGM;
+        window.swapGMForETH = swapGMForETH;
+        window.checkPoolStatus = checkPoolStatus;
+        window.checkReactFHEVM = checkReactFHEVM;
+        window.waitForReactFHEVM = waitForReactFHEVM;
+        window.setupWalletListeners = setupWalletListeners;
+        window.forceDecryptConfidentialBalance = forceDecryptConfidentialBalance;
+        window.manualInitialize = window.manualInitialize;
+        window.retryFHEVMInitialization = window.retryFHEVMInitialization;
+        window.forceEIP712Signature = window.forceEIP712Signature;
+        window.dailyCheckIn = window.dailyCheckIn;
+        window.performAIResearch = window.performAIResearch;
+        window.fundResearchContract = window.fundResearchContract;
+        window.addLiquidity = window.addLiquidity;
+        window.addLiquidityWithAmounts = window.addLiquidityWithAmounts;
+
+        // Setup wallet listeners for auto-refresh
+        setupWalletListeners();
+
+        // Monitor for FHEVM availability and retry initialization (only once)
+        setInterval(() => {
+            if (window.retryFHEVMInit && window.fhevm && userAddress && !eip712Signed) {
+                console.log('🔄 FHEVM is now available, retrying initialization...');
+                window.retryFHEVMInitialization();
+                window.retryFHEVMInit = false; // Stop retrying after first attempt
+            }
+        }, 2000); // Check every 2 seconds
+
+        // Also listen for FHEVM availability from React app (only once)
+        window.addEventListener('fhevmReady', () => {
+            console.log('🔔 FHEVM ready event received from React app');
+            if (window.retryFHEVMInit && userAddress && !eip712Signed) {
+                console.log('🔄 Triggering FHEVM retry from event (wallet connected)...');
+                window.retryFHEVMInitialization();
+                window.retryFHEVMInit = false; // Stop retrying after first attempt
+            } else if (window.retryFHEVMInit && !userAddress) {
+                console.log('⚠️ FHEVM ready but no wallet connection yet, will retry when wallet connects');
+            }
+        });
+
+        // Auto-initialize when React app is ready
+        async function autoInitializeWhenReady() {
+            console.log('🔄 Waiting for React app to be ready...');
+            
+            let attempts = 0;
+            const maxAttempts = 30; // 30 seconds max wait
+            
+            while (attempts < maxAttempts) {
+                // Check if React app has connected wallet (FHEVM is optional for basic functionality)
+                if (window.ethereum && window.ethereum.selectedAddress) {
+                    console.log('✅ React app wallet ready! Auto-initializing...');
+                    console.log('🔍 Wallet address:', window.ethereum.selectedAddress);
+                    console.log('🔍 FHEVM available:', !!window.fhevm);
+                    
+                    try {
+                        // Initialize our script with React app's wallet connection
+                        await initializeSwap();
+                        console.log('✅ Auto-initialization completed');
+                        return;
+                    } catch (error) {
+                        console.log('⚠️ Auto-initialization failed:', error.message);
+                        console.log('🔄 Retrying in 2 seconds...');
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                attempts++;
+            }
+            
+            console.log('⚠️ React app not ready after 30 seconds, manual initialization required');
+            console.log('💡 You can call window.manualInitialize() to initialize manually');
+        }
+
+        // Wait for wallet connection before auto-initializing
+        async function waitForWalletConnection() {
+            console.log('🔄 Waiting for wallet connection...');
+            
+            // Check if wallet is already connected - wait a bit for React app to connect
+            setTimeout(async () => {
+                if (window.ethereum && window.ethereum.selectedAddress) {
+                    console.log('🔗 Wallet already connected, initializing...');
+                    try {
+                        await initializeSwap();
+                        console.log('✅ Wallet connection initialization completed');
+                        
+                        // Check if FHEVM is ready and trigger EIP-712 if needed (only if wallet is connected)
+                        if (window.fhevm && window.retryFHEVMInit && userAddress) {
+                            console.log('🔄 FHEVM is ready, triggering EIP-712 signature...');
+                            await window.retryFHEVMInitialization();
+                        }
+                    } catch (error) {
+                        console.log('⚠️ Wallet connection initialization failed:', error.message);
+                    }
+                } else {
+                    console.log('⚠️ No wallet connection detected, waiting for user to connect...');
+                }
+            }, 3000); // Wait 3 seconds for React app to connect wallet
+            
+            // Listen for wallet connection events
+            if (window.ethereum) {
+                window.ethereum.on('accountsChanged', async (accounts) => {
+                    if (accounts.length > 0) {
+                        console.log('🔗 Wallet connected, initializing...');
+                        try {
+                            await initializeSwap();
+                            console.log('✅ Wallet connection initialization completed');
+                            
+                            // Check if FHEVM is ready and trigger EIP-712 if needed
+                            if (window.fhevm && window.retryFHEVMInit) {
+                                console.log('🔄 FHEVM is ready, triggering EIP-712 signature...');
+                                await window.retryFHEVMInitialization();
+                            }
+                        } catch (error) {
+                            console.log('⚠️ Wallet connection initialization failed:', error.message);
+                        }
+                    } else {
+                        console.log('🔌 Wallet disconnected');
+                        // Reset contracts when wallet disconnects
+                        tokenContract = null;
+                        swapContract = null;
+                        researchAIContract = null;
+                        userAddress = null;
+                        window.retryFHEVMInit = false;
+                    }
+                });
+            }
+        }
+
+        // Start waiting for wallet connection instead of auto-initializing
+        waitForWalletConnection();
+
+        // Public GM to ETH swap function
+        window.swapGMForETHPublic = async function swapGMForETHPublic(gmAmountParam = null) {
+            try {
+                // Prevent double execution
+                if (swapInProgress) {
+                    console.log('⚠️ Swap already in progress, ignoring duplicate call');
+                    return;
+                }
+                swapInProgress = true;
+                
+                // Auto-initialize if contracts are not ready
+                if (!swapContract || !tokenContract) {
+                    console.log('⚠️ Contracts not initialized, attempting auto-initialization...');
+                    try {
+                        await initializeSwap();
+                        console.log('✅ Auto-initialization successful');
+                    } catch (initError) {
+                        throw new Error(`Contracts not initialized and auto-initialization failed: ${initError.message}`);
+                    }
+                }
+                
+                // Get GM amount - use parameter if provided, otherwise try to read from input field
+                let gmAmount = "100"; // Default fallback
+                
+                if (gmAmountParam !== null && gmAmountParam !== undefined) {
+                    // Use the parameter passed from React component
+                    gmAmount = gmAmountParam.toString();
+                    console.log(`🔍 Using parameter value: "${gmAmount}"`);
+                } else {
+                    // Try to find the input field in the swap section
+                    const swapSection = document.querySelector('.glass-card');
+                    if (swapSection) {
+                        const numberInputs = swapSection.querySelectorAll('input[type="number"]');
+                        if (numberInputs.length > 0) {
+                            // Get the first number input (should be the "From" field)
+                            const inputValue = numberInputs[0].value;
+                            if (inputValue && !isNaN(parseFloat(inputValue))) {
+                                gmAmount = inputValue;
+                            }
+                        }
+                    }
+                    console.log(`🔍 Using input field value: "${gmAmount}"`);
+                }
+                
+                // Debug: Check what value we're getting
+                console.log(`🔍 Debug - Final GM amount: "${gmAmount}"`);
+                console.log(`🔍 Debug - Input value type:`, typeof gmAmount);
+                
+                // Validate the amount
+                const numericAmount = parseFloat(gmAmount);
+                if (isNaN(numericAmount) || numericAmount <= 0) {
+                    throw new Error(`Invalid GM amount: ${gmAmount}`);
+                }
+                
+                // Use the correct decimal handling - GM tokens use 18 decimals
+                const gmAmountWei = ethers.utils.parseEther(gmAmount);
+                
+                console.log(`💱 Swapping ${gmAmount} GM for ETH (Public)...`);
+                console.log(`📊 GM Amount in Wei: ${gmAmountWei.toString()}`);
+                console.log(`📊 Numeric amount: ${numericAmount}`);
+                
+                // Check user balance
+                const userBalance = await tokenContract.balanceOf(userAddress);
+                console.log(`💰 User GM balance: ${ethers.utils.formatEther(userBalance)} GM`);
+                
+                if (userBalance.lt(gmAmountWei)) {
+                    console.log(`⚠️ Insufficient GM balance. You have ${ethers.utils.formatEther(userBalance)} GM, trying to swap ${gmAmount} GM`);
+                    console.log('🪙 Auto-minting GM tokens for user...');
+                    const mintAmount = ethers.utils.parseEther("10000");
+                    const mintTx = await tokenContract.mint(userAddress, mintAmount);
+                    await mintTx.wait();
+                    console.log(`✅ Minted ${ethers.utils.formatEther(mintAmount)} GM tokens to user`);
+                }
+                
+                // Approve swap contract to spend GM tokens - use exact amount needed
+                console.log('🔑 Approving swap contract to spend GM tokens...');
+                console.log(`📊 Approval amount: ${gmAmountWei.toString()} wei (${gmAmount} GM)`);
+                const approveTx = await tokenContract.approve(SWAP_ADDRESS, gmAmountWei);
+                await approveTx.wait();
+                console.log('✅ Approval successful');
+                
+                // Execute swap
+                console.log('💱 Executing GM→ETH swap...');
+                const swapTx = await swapContract.swapGMForETHPublic(gmAmountWei);
+                console.log(`📤 Swap transaction sent: ${swapTx.hash}`);
+                
+                const receipt = await swapTx.wait();
+                console.log(`✅ GM→ETH swap successful! Gas used: ${receipt.gasUsed.toString()}`);
+                
+                // Refresh balances
+                await loadTokenBalances();
+                
+            } catch (error) {
+                console.error(`❌ GM→ETH swap failed: ${error.message}`);
+                throw error;
+            } finally {
+                // Reset flag to allow future swaps
+                swapInProgress = false;
+            }
+        };
+
+        // ===== Daily Check-in availability helpers (UTC+7 reset at 07:00) =====
+        
+        // Check on-chain if user has checked in today
+        window.checkDailyCheckInStatus = async function checkDailyCheckInStatus() {
+            try {
+                if (!userAddress || !researchAIContract) {
+                    console.log('⚠️ Wallet not connected or contract not initialized');
+                    return 'not-checked';
+                }
+                
+                // Check if user has checked in today (this would need to be implemented in the contract)
+                // For now, we'll use localStorage as the primary source
+                const lastCheckIn = getLastCheckIn();
+                const windowStart = currentResetStartUtc7();
+                const hasCheckedInToday = lastCheckIn >= windowStart;
+                
+                console.log(`📅 Check-in status: ${hasCheckedInToday ? 'Already checked in today' : 'Available'}`);
+                return hasCheckedInToday ? 'completed' : 'ready';
+            } catch (error) {
+                console.error('❌ Error checking daily check-in status:', error);
+                return 'not-checked';
+            }
+        };
+        function nowUtcSeconds() {
+            return Math.floor(Date.now() / 1000);
+        }
+
+        // Return start of current window (most recent 07:00 UTC+7)
+        function currentResetStartUtc7() {
+            const now = new Date();
+            const tzOffsetMin = 7 * 60;
+            const utcMs = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+            const plus7 = new Date(utcMs + tzOffsetMin * 60 * 1000);
+
+            const startLocal = new Date(plus7);
+            startLocal.setHours(7, 0, 0, 0);
+            // If current local time is before today's 07:00, use yesterday 07:00
+            if (plus7.getTime() < startLocal.getTime()) {
+                startLocal.setDate(startLocal.getDate() - 1);
+            }
+            const startUtcMs = startLocal.getTime() - tzOffsetMin * 60 * 1000;
+            return Math.floor(startUtcMs / 1000);
+        }
+
+        // Return next reset timestamp at 07:00 UTC+7 from now
+        function nextResetUtc7() {
+            const start = currentResetStartUtc7();
+            // +24h from start
+            return start + 24 * 60 * 60;
+        }
+
+        function setLastCheckIn(tsSec) {
+            try { localStorage.setItem('ccg.lastCheckInTs', String(tsSec)); } catch (_) {}
+        }
+        function getLastCheckIn() {
+            try {
+                const v = localStorage.getItem('ccg.lastCheckInTs');
+                return v ? parseInt(v, 10) : 0;
+            } catch (_) { return 0; }
+        }
+        function getNextReset() {
+            try {
+                const v = localStorage.getItem('ccg.nextResetTs');
+                return v ? parseInt(v, 10) : 0;
+            } catch (_) { return 0; }
+        }
+        function setNextReset(tsSec) {
+            try { localStorage.setItem('ccg.nextResetTs', String(tsSec)); } catch (_) {}
+        }
+
+        function isCheckInAvailable() {
+            const last = getLastCheckIn();
+            const windowStart = currentResetStartUtc7();
+            // Available if user has NOT checked in since windowStart
+            return last < windowStart;
+        }
+
+        function updateCheckInUIAvailability() {
+            const available = isCheckInAvailable();
+            // Expose to React
+            try {
+                window.dispatchEvent(new CustomEvent('checkInAvailabilityChanged', { detail: { available } }));
+            } catch (_) {}
+            // If there is a button in DOM with this id, toggle it
+            const btn = document.getElementById('dailyCheckInBtn');
+            if (btn) {
+                btn.style.display = available ? '' : 'none';
+            }
+        }
+
+        // Run once on load and then every 30s
+        updateCheckInUIAvailability();
+        setInterval(updateCheckInUIAvailability, 30000);
+
+        // Daily Check-in function (simplified - direct minting)
+        window.dailyCheckIn = async function dailyCheckIn() {
+            try {
+                if (!tokenContract) {
+                    throw new Error('Token contract not initialized');
+                }
+                
+                console.log('📅 Performing daily check-in...');
+                
+                // Simple daily check-in by minting 100 GM directly
+                const checkInAmount = ethers.utils.parseEther("100"); // 100 GM
+                
+                const checkInTx = await tokenContract.mint(userAddress, checkInAmount);
+                console.log(`📤 Daily check-in transaction sent: ${checkInTx.hash}`);
+                
+                const receipt = await checkInTx.wait();
+                console.log(`✅ Daily check-in successful! Gas used: ${receipt.gasUsed.toString()}`);
+                console.log('🎉 You received 100 GM tokens!');
+                
+                // Persist lock until next reset (07:00 UTC+7 of next day)
+                const nowTs = nowUtcSeconds();
+                const nextTs = nextResetUtc7();
+                setLastCheckIn(nowTs);
+                setNextReset(nextTs);
+                
+                // Hide button immediately after successful check-in
+                updateCheckInUIAvailability();
+                
+                // Dispatch event for React component synchronization
+                window.dispatchEvent(new CustomEvent('checkInAvailabilityChanged', {
+                    detail: { available: false, nextReset: nextTs }
+                }));
+                
+                // Dispatch success event
+                window.dispatchEvent(new CustomEvent('checkInSuccess'));
+
+                // Refresh balances
+                await loadTokenBalances();
+                
+                return true;
+            } catch (error) {
+                console.error(`❌ Daily check-in failed: ${error.message}`);
+                throw error;
+            }
+        };
+
+        // AI Research function
+        window.performAIResearch = async function performAIResearch(topic = "crypto market analysis") {
+            try {
+                if (!researchAIContract || !tokenContract) {
+                    throw new Error('Contracts not initialized');
+                }
+                
+                console.log(`🔬 Performing AI research on: ${topic}`);
+                
+                // Fixed research cost (10 GM)
+                const researchCost = ethers.utils.parseEther("10");
+                console.log(`💰 Research cost: ${ethers.utils.formatEther(researchCost)} GM`);
+                
+                // Check user balance
+                const userBalance = await tokenContract.balanceOf(userAddress);
+                console.log(`💰 User GM balance: ${ethers.utils.formatEther(userBalance)} GM`);
+                
+                if (userBalance.lt(researchCost)) {
+                    throw new Error(`Insufficient GM balance. You have ${ethers.utils.formatEther(userBalance)} GM, need ${ethers.utils.formatEther(researchCost)} GM`);
+                }
+                
+                // Approve research contract to spend GM tokens
+                console.log('🔑 Approving research contract to spend GM tokens...');
+                const approveTx = await tokenContract.approve(RESEARCH_AI_ADDRESS, researchCost);
+                await approveTx.wait();
+                console.log('✅ Approval successful');
+                
+                // Perform research
+                console.log('🔬 Executing AI research...');
+                const researchTx = await researchAIContract.performAIResearch(topic);
+                console.log(`📤 Research transaction sent: ${researchTx.hash}`);
+                
+                const receipt = await researchTx.wait();
+                console.log(`✅ AI research successful! Gas used: ${receipt.gasUsed.toString()}`);
+                console.log(`🔬 Research completed on: ${topic}`);
+                
+                // Refresh balances
+                await loadTokenBalances();
+                
+                return true;
+            } catch (error) {
+                console.error(`❌ AI research failed: ${error.message}`);
+                throw error;
+            }
+        };
+
+        // Fund Research Contract function (for owner)
+        window.fundResearchContract = async function fundResearchContract(amount = "1000") {
+            try {
+                if (!tokenContract || !researchAIContract) {
+                    throw new Error('Contracts not initialized');
+                }
+                
+                const amountWei = ethers.utils.parseEther(amount);
+                console.log(`💰 Funding research contract with ${amount} GM...`);
+                
+                // Check owner balance
+                const ownerBalance = await tokenContract.balanceOf(userAddress);
+                console.log(`💰 Owner GM balance: ${ethers.utils.formatEther(ownerBalance)} GM`);
+                
+                if (ownerBalance.lt(amountWei)) {
+                    throw new Error(`Insufficient GM balance. You have ${ethers.utils.formatEther(ownerBalance)} GM, trying to fund ${amount} GM`);
+                }
+                
+                // Approve research contract to spend GM tokens
+                console.log('🔑 Approving research contract to spend GM tokens...');
+                const approveTx = await tokenContract.approve(RESEARCH_AI_ADDRESS, amountWei);
+                await approveTx.wait();
+                console.log('✅ Approval successful');
+                
+                // Transfer GM to research contract
+                console.log('💰 Transferring GM to research contract...');
+                const transferTx = await tokenContract.transfer(RESEARCH_AI_ADDRESS, amountWei);
+                console.log(`📤 Transfer transaction sent: ${transferTx.hash}`);
+                
+                const receipt = await transferTx.wait();
+                console.log(`✅ Research contract funded successfully! Gas used: ${receipt.gasUsed.toString()}`);
+                console.log(`💰 Funded ${amount} GM to research contract`);
+                
+                // Refresh balances
+                await loadTokenBalances();
+                
+                return true;
+            } catch (error) {
+                console.error(`❌ Funding research contract failed: ${error.message}`);
+                throw error;
+            }
+        };
+
+        // Add Liquidity function
+        window.addLiquidity = async function addLiquidity() {
+            try {
+                if (!swapContract || !tokenContract) {
+                    throw new Error('Contracts not initialized');
+                }
+                
+                console.log('🏊 Adding liquidity to swap pool...');
+                
+                // Check if pool is initialized
+                let isInitialized = false;
+                try {
+                    isInitialized = await swapContract.poolInitialized();
+                } catch (e) {
+                    console.log('⚠️ poolInitialized method not available');
+                }
+                
+                // Amounts to add (adjust based on available ETH)
+                const ethAmount = ethers.utils.parseEther("0.25"); // 0.25 ETH
+                const gmAmount = ethers.utils.parseEther("25000"); // 25,000 GM (rate: 1 ETH = 100,000 GM)
+                
+                // Check ETH balance
+                const ethBalance = await provider.getBalance(userAddress);
+                if (ethBalance.lt(ethAmount)) {
+                    throw new Error(`Insufficient ETH balance. Need ${ethers.utils.formatEther(ethAmount)} ETH, have ${ethers.utils.formatEther(ethBalance)} ETH`);
+                }
+                
+                // Check GM balance
+                const gmBalance = await tokenContract.balanceOf(userAddress);
+                if (gmBalance.lt(gmAmount)) {
+                    console.log('⚠️ Insufficient GM balance, minting more...');
+                    const mintTx = await tokenContract.mint(userAddress, gmAmount.sub(gmBalance));
+                    await mintTx.wait();
+                    console.log('✅ Minted additional GM tokens');
+                }
+                
+                // Approve swap contract to spend GM tokens
+                console.log('🔐 Approving swap contract to spend GM tokens...');
+                const approveTx = await tokenContract.approve(SWAP_ADDRESS, gmAmount);
+                await approveTx.wait();
+                console.log('✅ GM tokens approved');
+                
+                if (isInitialized) {
+                    // Add liquidity to existing pool
+                    console.log('🏊 Adding liquidity to existing pool...');
+                    const addTx = await swapContract.addLiquidity(gmAmount, {
+                        value: ethAmount
+                    });
+                    await addTx.wait();
+                    console.log('✅ Liquidity added successfully:', addTx.hash);
+                } else {
+                    // Initialize pool
+                    console.log('🏊 Initializing pool with liquidity...');
+                    const initTx = await swapContract.initializePool(gmAmount, {
+                        value: ethAmount
+                    });
+                    await initTx.wait();
+                    console.log('✅ Pool initialized with liquidity:', initTx.hash);
+                }
+                
+                // Refresh balances
+                await loadTokenBalances();
+                
+                return true;
+            } catch (error) {
+                console.error(`❌ Add liquidity failed: ${error.message}`);
+                throw error;
+            }
+        };
+
+        // Add Liquidity with Custom Amounts function
+        window.addLiquidityWithAmounts = async function addLiquidityWithAmounts(ethAmountStr, gmAmountStr) {
+            try {
+                if (!swapContract || !tokenContract) {
+                    throw new Error('Contracts not initialized');
+                }
+                
+                const ethAmount = ethers.utils.parseEther(ethAmountStr);
+                const gmAmount = ethers.utils.parseEther(gmAmountStr);
+                
+                console.log(`🏊 Adding liquidity: ${ethAmountStr} ETH + ${gmAmountStr} GM...`);
+                
+                // Check if pool is initialized
+                let isInitialized = false;
+                try {
+                    isInitialized = await swapContract.poolInitialized();
+                } catch (e) {
+                    console.log('⚠️ poolInitialized method not available');
+                }
+                
+                // Check ETH balance
+                const ethBalance = await provider.getBalance(userAddress);
+                if (ethBalance.lt(ethAmount)) {
+                    throw new Error(`Insufficient ETH balance. Need ${ethers.utils.formatEther(ethAmount)} ETH, have ${ethers.utils.formatEther(ethBalance)} ETH`);
+                }
+                
+                // Check GM balance
+                const gmBalance = await tokenContract.balanceOf(userAddress);
+                if (gmBalance.lt(gmAmount)) {
+                    console.log('⚠️ Insufficient GM balance, minting more...');
+                    const mintTx = await tokenContract.mint(userAddress, gmAmount.sub(gmBalance));
+                    await mintTx.wait();
+                    console.log('✅ Minted additional GM tokens');
+                }
+                
+                // Approve swap contract to spend GM tokens
+                console.log('🔐 Approving swap contract to spend GM tokens...');
+                const approveTx = await tokenContract.approve(SWAP_ADDRESS, gmAmount);
+                await approveTx.wait();
+                console.log('✅ GM tokens approved');
+                
+                if (isInitialized) {
+                    // Add liquidity to existing pool
+                    console.log('🏊 Adding liquidity to existing pool...');
+                    const addTx = await swapContract.addLiquidity(gmAmount, {
+                        value: ethAmount
+                    });
+                    await addTx.wait();
+                    console.log('✅ Liquidity added successfully:', addTx.hash);
+                } else {
+                    // Initialize pool
+                    console.log('🏊 Initializing pool with liquidity...');
+                    const initTx = await swapContract.initializePool(gmAmount, {
+                        value: ethAmount
+                    });
+                    await initTx.wait();
+                    console.log('✅ Pool initialized with liquidity:', initTx.hash);
+                }
+                
+                // Refresh balances
+                await loadTokenBalances();
+                
+                return true;
+            } catch (error) {
+                console.error(`❌ Add liquidity with amounts failed: ${error.message}`);
+                throw error;
+            }
+        };
+
+        console.log('🚀 GM Token Swap functions loaded');
+        console.log('Available functions:');
+        console.log('  - initializeSwap() - Initialize wallet and contracts');
+        console.log('  - loadGMTokens(amount) - Mint GM tokens to wallet');
+        console.log('  - loadTokenBalances() - Load and display all token balances');
+        console.log('  - swapETHForGM(ethAmount) - Swap ETH → GM (Public)');
+        console.log('  - swapGMForETH(gmAmount) - Swap GM → ETH (FHE)');
+        console.log('  - swapGMForETHPublic(gmAmount) - Swap GM → ETH (Public)');
+        console.log('  - checkPoolStatus() - Check pool and balance status');
+        console.log('  - checkReactFHEVM() - Check if React FHEVM is available');
+        console.log('  - waitForReactFHEVM() - Wait for React FHEVM to be ready');
+        console.log('  - setupWalletListeners() - Setup auto-refresh on wallet changes');
+        console.log('  - forceDecryptConfidentialBalance() - Force decrypt with EIP-712 signature');
+        console.log('  - manualInitialize() - Manual trigger initialization (for debugging)');
+        console.log('  - retryFHEVMInitialization() - Retry FHEVM initialization when available');
+        console.log('  - forceEIP712Signature() - Force EIP-712 signature for testing');
+        console.log('  - checkContractState() - Check contract state and load balances');
+        console.log('  - syncGMAmount() - Auto-sync GM amount based on ETH input');
+        console.log('  - syncETHAmount() - Auto-sync ETH amount based on GM input');
+        console.log('  - dailyCheckIn() - Daily check-in to receive 100 GM');
+        console.log('  - performAIResearch(topic) - Perform AI research (costs 10 GM)');
+        console.log('  - fundResearchContract(amount) - Fund research contract with GM tokens');
+        console.log('  - addLiquidity() - Add liquidity to the swap pool');
+        console.log('  - addLiquidityWithAmounts(ethAmount, gmAmount) - Add liquidity with custom amounts');
+
+        // Helper function to validate contract state
+        async function validateContractState() {
+            try {
+                console.log('🔍 Validating contract state...');
+                
+                // Check if pool is initialized
+                let poolInitialized = false;
+                try {
+                    poolInitialized = await swapContract.poolInitialized();
+                    console.log(`🏊 Pool initialized: ${poolInitialized}`);
+                    if (poolInitialized) {
+                        console.log('✅ Pool is already initialized - ready for swaps!');
+                    }
+                } catch (error) {
+                    console.log(`⚠️ Could not check pool status: ${error.message}`);
+                }
+                
+                // Check user's GM balance
+                let gmBalance = 0;
+                try {
+                    gmBalance = await tokenContract.balanceOf(userAddress);
+                    console.log(`💰 GM balance: ${gmBalance.toString()}`);
+                } catch (error) {
+                    console.log(`⚠️ Could not check GM balance: ${error.message}`);
+                }
+                
+                // Check operator permissions
+                let isOperator = false;
+                try {
+                    isOperator = await tokenContract.isOperator(userAddress, SWAP_ADDRESS);
+                    console.log(`🔑 Is operator: ${isOperator}`);
+                } catch (error) {
+                    console.log(`⚠️ Could not check operator status: ${error.message}`);
+                }
+                
+                // Return validation results
+                return {
+                    poolInitialized,
+                    gmBalance: Number(gmBalance),
+                    isOperator,
+                    isValid: poolInitialized && Number(gmBalance) > 0 && isOperator
+                };
+                
+            } catch (error) {
+                console.log(`❌ Contract state validation failed: ${error.message}`);
+                return {
+                    poolInitialized: false,
+                    gmBalance: 0,
+                    isOperator: false,
+                    isValid: false
+                };
+            }
+        }
+
+        // Check contract state function (from reference file)
+        window.checkContractState = async function checkContractState() {
+            try {
+                if (!swapContract || !tokenContract) {
+                    throw new Error('Contracts not initialized');
+                }
+                
+                console.log('🔍 Checking contract state...');
+                const state = await validateContractState();
+                
+                console.log('📊 Contract State Summary:');
+                console.log(`   • Pool initialized: ${state.poolInitialized ? '✅' : '❌'}`);
+                console.log(`   • GM balance: ${state.gmBalance} GM ${state.gmBalance > 0 ? '✅' : '❌'}`);
+                console.log(`   • Is operator: ${state.isOperator ? '✅' : '❌'}`);
+                console.log(`   • Overall valid: ${state.isValid ? '✅' : '❌'}`);
+                
+                if (!state.isValid) {
+                    console.log('💡 Required actions:');
+                    if (!state.poolInitialized) {
+                        console.log('   1. Initialize pool (owner only)');
+                    }
+                    if (state.gmBalance <= 0) {
+                        console.log('   2. Mint GM tokens');
+                    }
+                    if (!state.isOperator) {
+                        console.log('   3. Set operator permissions');
+                    }
+                }
+                
+                // Update UI with state info
+                const gmBalanceInfo = document.getElementById('gmBalanceInfo');
+                if (gmBalanceInfo) {
+                    gmBalanceInfo.innerHTML = `🔍 State: ${state.isValid ? '✅ Valid' : '❌ Invalid'} | Pool: ${state.poolInitialized ? '✅' : '❌'} | Op: ${state.isOperator ? '✅' : '❌'}`;
+                }
+                
+                // Auto-load balances after checking state
+                console.log('🔄 Auto-loading balances after state check...');
+                await loadTokenBalances();
+                
+            } catch (error) {
+                console.log(`❌ Contract state check failed: ${error.message}`);
+            }
+        };
+    </script>
+  </body>
+</html>
+
