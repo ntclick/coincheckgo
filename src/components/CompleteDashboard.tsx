@@ -52,6 +52,7 @@ export const CompleteDashboard: React.FC = () => {
   const [checkInStatus, setCheckInStatus] = useState<'not-checked' | 'ready' | 'completed' | 'loading'>('not-checked');
   const [marketList, setMarketList] = useState<any[]>([]);
   const [isLoadingMarket, setIsLoadingMarket] = useState(false);
+  const [marketPage, setMarketPage] = useState(0); // pagination for MarketCap
   
   const [currentPage, setCurrentPage] = useState('home');
 
@@ -1914,9 +1915,17 @@ export const CompleteDashboard: React.FC = () => {
             </div>
             <div className="glass-card" style={{ padding: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
-                  Showing {marketList.length} assets
-                </div>
+                {(() => {
+                  const pageSize = 50;
+                  const total = marketList.length;
+                  const start = total === 0 ? 0 : marketPage * pageSize + 1;
+                  const end = Math.min(total, (marketPage + 1) * pageSize);
+                  return (
+                    <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
+                      Showing {start}-{end} of {total}
+                    </div>
+                  );
+                })()}
                 <button
                   onClick={loadMarketCapData}
                   disabled={isLoadingMarket}
@@ -1945,9 +1954,14 @@ export const CompleteDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {marketList.map((c: any, idx: number) => (
-                      <tr key={c.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        <td style={{ padding: '8px', fontSize: '12px', color: 'rgba(255,255,255,0.8)' }}>{c.market_cap_rank ?? idx + 1}</td>
+                    {(() => {
+                      const pageSize = 50;
+                      const startIndex = marketPage * pageSize;
+                      const endIndex = Math.min(marketList.length, startIndex + pageSize);
+                      const pageItems = marketList.slice(startIndex, endIndex);
+                      return pageItems.map((c: any, i: number) => (
+                        <tr key={c.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <td style={{ padding: '8px', fontSize: '12px', color: 'rgba(255,255,255,0.8)' }}>{c.market_cap_rank ?? (startIndex + i + 1)}</td>
                         <td style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                           {c.image && (
                             <img src={c.image} alt={c.symbol} width={18} height={18} style={{ borderRadius: '50%' }} onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
@@ -1961,10 +1975,39 @@ export const CompleteDashboard: React.FC = () => {
                         </td>
                         <td style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#fff' }}>${(c.market_cap ?? 0).toLocaleString()}</td>
                         <td style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#fff' }}>${(c.total_volume ?? 0).toLocaleString()}</td>
-                      </tr>
-                    ))}
+                        </tr>
+                      ));
+                    })()}
                   </tbody>
                 </table>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                <button
+                  onClick={() => setMarketPage((p) => Math.max(0, p - 1))}
+                  disabled={marketPage === 0}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '8px',
+                    color: 'rgba(255,255,255,0.9)',
+                    padding: '8px 12px',
+                    cursor: marketPage === 0 ? 'not-allowed' : 'pointer',
+                    fontSize: '12px'
+                  }}
+                >Prev</button>
+                <button
+                  onClick={() => setMarketPage((p) => ((p + 1) * 50 < marketList.length ? p + 1 : p))}
+                  disabled={(marketPage + 1) * 50 >= marketList.length}
+                  style={{
+                    background: 'linear-gradient(135deg, rgb(0, 212, 255), rgb(157, 78, 221))',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: 'white',
+                    padding: '8px 12px',
+                    cursor: (marketPage + 1) * 50 >= marketList.length ? 'not-allowed' : 'pointer',
+                    fontSize: '12px'
+                  }}
+                >Next</button>
               </div>
             </div>
           </div>
