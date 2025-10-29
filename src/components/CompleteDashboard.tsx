@@ -698,76 +698,7 @@ export const CompleteDashboard: React.FC = () => {
                     <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '4px' }}>💡 GM Tokens are FHE encrypted</div>
                     <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)' }}>Only you can decrypt with your private key</div>
                     </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button style={{ 
-                      flex: '1 1 0%', 
-                      padding: '8px 12px', 
-                      background: 'rgba(0, 212, 255, 0.2)', 
-                      border: '1px solid rgba(0, 212, 255, 0.3)', 
-                      borderRadius: '6px', 
-                      color: 'rgb(0, 212, 255)', 
-                      fontSize: '12px', 
-                      cursor: 'pointer' 
-                    }}>🔄 Refresh</button>
-                    <button style={{ 
-                      flex: '1 1 0%', 
-                      padding: '8px 12px', 
-                      background: 'rgba(255, 184, 0, 0.2)', 
-                      border: '1px solid rgba(255, 184, 0, 0.3)', 
-                      borderRadius: '6px', 
-                      color: 'rgb(255, 184, 0)', 
-                      fontSize: '12px', 
-                      cursor: 'pointer' 
-                    }}>🪙 Mint GM</button>
-                    <button 
-                      style={{ 
-                        flex: '1 1 0%', 
-                        padding: '8px 12px', 
-                        background: 'rgba(255, 107, 0, 0.2)', 
-                        border: '1px solid rgba(255, 107, 0, 0.3)', 
-                        borderRadius: '6px', 
-                        color: 'rgb(255, 107, 0)', 
-                        fontSize: '12px', 
-                        cursor: 'pointer' 
-                      }}
-                      onClick={() => {
-                        // Trigger EIP-712 signature for decryption
-                        if (window.forceDecryptConfidentialBalance) {
-                          window.forceDecryptConfidentialBalance();
-                        } else {
-                          console.log('🔐 Force decrypt function not available');
-                        }
-                        
-                        // Trigger swap based on direction
-                        console.log('🔄 Swap button clicked, direction:', swapDirection);
-                        if (swapDirection === 'ETH_TO_GM') {
-                          if (window.swapETHForGM) {
-                            console.log('🔄 Calling swapETHForGM with amount:', fromAmount);
-                            window.swapETHForGM(fromAmount);
-                          } else {
-                            console.log('⚠️ swapETHForGM function not available');
-                          }
-                        } else {
-                          if (window.swapGMForETH) {
-                            console.log('🔄 Calling swapGMForETH (FHE Confidential) with amount:', fromAmount);
-                            window.swapGMForETH(fromAmount);
-                          } else {
-                            console.log('⚠️ swapGMForETH function not available');
-                          }
-                        }
-                      }}
-                    >🔐 Decrypt FHE</button>
-                    <button style={{ 
-                      flex: '1 1 0%', 
-                      padding: '8px 12px', 
-                      background: 'rgba(0, 255, 127, 0.2)', 
-                      border: '1px solid rgba(0, 255, 127, 0.3)', 
-                      borderRadius: '6px', 
-                      color: 'rgb(0, 255, 127)', 
-                      fontSize: '12px', 
-                      cursor: 'pointer' 
-                    }}>🔍 Check State</button>
-                  </div>
+                  
                 </div>
               </div>
 
@@ -1342,7 +1273,7 @@ export const CompleteDashboard: React.FC = () => {
 
             {/* Market Overview */}
             <div className="market-section">
-              <div className="market-grid">
+            <div className="market-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 {/* Top Gainers */}
                 <div className="glass-card">
                   <h3 style={{ color: '#00ff88', marginBottom: '10px', fontSize: '16px' }}>📈 Top Gainers</h3>
@@ -1503,76 +1434,7 @@ export const CompleteDashboard: React.FC = () => {
                     <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '4px' }}>💡 GM Tokens are FHE encrypted</div>
                     <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)' }}>Only you can decrypt with your private key</div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button style={{ 
-                      flex: '1 1 0%', 
-                      padding: '8px 12px', 
-                      background: 'rgba(0, 212, 255, 0.2)', 
-                      border: '1px solid rgba(0, 212, 255, 0.3)', 
-                      borderRadius: '6px', 
-                      color: 'rgb(0, 212, 255)', 
-                      fontSize: '12px', 
-                      cursor: 'pointer' 
-                    }}>🔄 Refresh</button>
-                    <button style={{ 
-                      flex: '1 1 0%', 
-                      padding: '8px 12px', 
-                      background: 'rgba(255, 184, 0, 0.2)', 
-                      border: '1px solid rgba(255, 184, 0, 0.3)', 
-                      borderRadius: '6px', 
-                      color: 'rgb(255, 184, 0)', 
-                      fontSize: '12px', 
-                      cursor: 'pointer' 
-                    }}>🪙 Mint GM</button>
-                  <button
-                    style={{
-                        flex: '1 1 0%', 
-                        padding: '8px 12px', 
-                        background: 'rgba(255, 107, 0, 0.2)', 
-                        border: '1px solid rgba(255, 107, 0, 0.3)', 
-                        borderRadius: '6px', 
-                        color: 'rgb(255, 107, 0)', 
-                        fontSize: '12px', 
-                      cursor: 'pointer'
-                    }}
-                      onClick={() => {
-                        // Trigger EIP-712 signature for decryption
-                        if (window.forceDecryptConfidentialBalance) {
-                          window.forceDecryptConfidentialBalance();
-                        } else {
-                          console.log('🔐 Force decrypt function not available');
-                        }
-                        
-                        // Trigger swap based on direction
-                        console.log('🔄 Swap button clicked, direction:', swapDirection);
-                        if (swapDirection === 'ETH_TO_GM') {
-                          if (window.swapETHForGM) {
-                            console.log('🔄 Calling swapETHForGM...');
-                            window.swapETHForGM();
-                        } else {
-                            console.log('⚠️ swapETHForGM function not available');
-                          }
-                        } else {
-                          if (window.swapGMForETH) {
-                            console.log('🔄 Calling swapGMForETH (FHE Confidential)...');
-                            window.swapGMForETH();
-                          } else {
-                            console.log('⚠️ swapGMForETH function not available');
-                          }
-                        }
-                      }}
-                    >🔐 Decrypt FHE</button>
-                    <button style={{ 
-                      flex: '1 1 0%', 
-                      padding: '8px 12px', 
-                      background: 'rgba(0, 255, 127, 0.2)', 
-                      border: '1px solid rgba(0, 255, 127, 0.3)', 
-                      borderRadius: '6px', 
-                      color: 'rgb(0, 255, 127)', 
-                      fontSize: '12px', 
-                      cursor: 'pointer' 
-                    }}>🔍 Check State</button>
-                  </div>
+                  
                 </div>
               </div>
 
