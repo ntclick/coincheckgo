@@ -29,6 +29,16 @@ function App() {
     <div className="App">
       <Toaster position="top-right" />
       <CompleteDashboard />
+      <footer style={{
+        marginTop: '40px',
+        padding: '16px',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        color: 'rgba(255,255,255,0.7)',
+        textAlign: 'center'
+      }}>
+        <span style={{ marginRight: 8 }}>© {new Date().getFullYear()} <a href="https://coincheckgo.com" target="_blank" rel="noreferrer" style={{ color: '#00d4ff', textDecoration: 'none' }}>coincheckgo.com</a></span>
+        <span>• Author: <a href="https://x.com/trungkts29" target="_blank" rel="noreferrer" style={{ color: '#00d4ff', textDecoration: 'none' }}>@trungkts29</a></span>
+      </footer>
     </div>
   );
 }

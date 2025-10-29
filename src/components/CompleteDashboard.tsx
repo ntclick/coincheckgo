@@ -582,7 +582,7 @@ export const CompleteDashboard: React.FC = () => {
     <div className="modern-dashboard">
       {/* Sidebar Navigation */}
       <nav className="sidebar">
-        <div className="sidebar-logo">🪙 CoinCheckGo FHE</div>
+        <div className="sidebar-logo">🪙 Coincheckgo - AI Research Tools FHE</div>
         <ul className="nav-menu">
           {navItems.map((item) => (
             <li key={item.id} className="nav-item">
@@ -631,7 +631,15 @@ export const CompleteDashboard: React.FC = () => {
           <div className="page">
             <div className="page-header">
               <h1>🏠 Home Dashboard</h1>
-              <p>Welcome to CoinCheckGo FHE - Your privacy-first crypto research platform</p>
+              <p>Welcome to Coincheckgo - AI Research Tools FHE - Your privacy-first crypto research platform</p>
+              <div style={{ marginTop: '16px', padding: '12px', background: 'rgba(0, 212, 255, 0.1)', border: '1px solid rgba(0, 212, 255, 0.3)', borderRadius: '8px', textAlign: 'center' }}>
+                <div style={{ color: 'rgb(0, 212, 255)', fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}>
+                  🌐 coincheckgo.com
+                </div>
+                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '12px' }}>
+                  Created by <a href="https://x.com/trungkts29" target="_blank" rel="noopener noreferrer" style={{ color: 'rgb(0, 212, 255)', textDecoration: 'none' }}>@trungkts29</a>
+                </div>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
