@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { CompleteDashboard } from './components/CompleteDashboard';
 import { autoInitializeFHEVM } from './utils/fhevm';
+import './components/ModernDashboard.css';
+import './components/OriginalDesign.css';
 
 function App() {
   useEffect(() => {
