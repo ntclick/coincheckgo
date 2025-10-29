@@ -365,18 +365,22 @@ const useCoinCheckGoFHESimple = () => {
       // Debug log removed
       // Debug logs removed
       
-      // Load token info
-      const [name, symbol, decimals, totalSupply] = await Promise.all([
-        gmContract.name(),
-        gmContract.symbol(),
-        gmContract.decimals(),
-        gmContract.totalSupply()
-      ]);
+      // Load token info (guard against non-standard or failing name/symbol)
+      let name = '';
+      let symbol = '';
+      let decimals = 18;
+      let totalSupply = 0;
+      try { name = await gmContract.name(); } catch { /* ignore */ }
+      try { symbol = await gmContract.symbol(); } catch { /* ignore */ }
+      try { decimals = await gmContract.decimals(); } catch { /* keep default 18 */ }
+      try { const ts = await gmContract.totalSupply(); totalSupply = Number(ethers.formatEther(ts)); } catch { /* ignore */ }
       setTokenInfo({ name, symbol, decimals, totalSupply });
       
-      // Load encrypted balance
-      const encryptedBalance = await gmContract.confidentialBalanceOf(userAddress);
-      setUserEncryptedBalance(encryptedBalance);
+      // Load encrypted balance (best-effort)
+      try {
+        const encryptedBalance = await gmContract.confidentialBalanceOf(userAddress);
+        setUserEncryptedBalance(encryptedBalance);
+      } catch { setUserEncryptedBalance(''); }
       
       // Load public balance
       try {

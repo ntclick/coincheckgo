@@ -40,18 +40,18 @@ class CryptoApiService {
   private cache: Map<string, any> = new Map();
   private cacheTimeout = 5 * 60 * 1000; // 5 minutes
 
-  // Get top 300 cryptocurrencies by market cap
-  async getTopCryptocurrencies(): Promise<CryptoData[]> {
-    const cacheKey = 'top_300_crypto';
+  // Get top cryptocurrencies by market cap
+  async getTopCryptocurrencies(limit: number = 300): Promise<CryptoData[]> {
+    const cacheKey = `top_crypto_${limit}`;
     const cached = this.getCachedData(cacheKey);
     if (cached) return cached;
 
     try {
-      // Try to get 300 coins with API key if available
+      // Try to get coins with API key if available
       const paramsBase: any = {
         vs_currency: 'usd',
         order: 'market_cap_desc',
-        per_page: 300,
+        per_page: Math.min(limit, 300),
         page: 1,
         sparkline: true,
         price_change_percentage: '24h,7d,30d'
@@ -62,8 +62,8 @@ class CryptoApiService {
       let response = await axios.get(`${this.baseUrl}/coins/markets`, { params: paramsWithKey });
       let data = response.data as CryptoData[];
 
-      // If API returns fewer than 300, try aggregating multiple pages without key
-      if (!data || data.length < 300) {
+      // If API returns fewer than requested, try aggregating multiple pages without key
+      if (!data || data.length < limit) {
         const pages = [1, 2, 3];
         const results = await Promise.all(
           pages.map((p) =>
@@ -75,13 +75,13 @@ class CryptoApiService {
         const merged = ([] as CryptoData[]).concat(...results);
         // Deduplicate by id
         const seen = new Set<string>();
-        data = merged.filter(c => (seen.has(c.id) ? false : (seen.add(c.id), true))).slice(0, 300);
+        data = merged.filter(c => (seen.has(c.id) ? false : (seen.add(c.id), true))).slice(0, limit);
       }
 
       this.setCachedData(cacheKey, data);
       return data;
     } catch (error: any) {
-      // Fallbacks on 401 or other errors: aggregate 3 pages without key (100 each)
+      // Fallbacks on 401/403/429 or other errors: aggregate 3 pages without key (100 each)
       try {
         const paramsBase: any = {
           vs_currency: 'usd',
@@ -100,7 +100,7 @@ class CryptoApiService {
         );
         const merged = ([] as CryptoData[]).concat(...results);
         const seen = new Set<string>();
-        const data = merged.filter(c => (seen.has(c.id) ? false : (seen.add(c.id), true))).slice(0, 300);
+        const data = merged.filter(c => (seen.has(c.id) ? false : (seen.add(c.id), true))).slice(0, limit);
         this.setCachedData(cacheKey, data);
         return data;
       } catch (fallbackError) {
@@ -117,14 +117,16 @@ class CryptoApiService {
     if (cached) return cached;
 
     try {
+      const apiKey = process.env.REACT_APP_COINCHECKGO_API_KEY;
       const response = await axios.get(`${this.baseUrl}/coins/${id}`, {
         params: {
           localization: false,
           tickers: false,
           market_data: true,
-          community_data: true,
-          developer_data: true,
-          sparkline: true
+          community_data: false,
+          developer_data: false,
+          sparkline: true,
+          ...(apiKey ? { x_cg_demo_api_key: apiKey } : {})
         }
       });
 
@@ -132,8 +134,36 @@ class CryptoApiService {
       this.setCachedData(cacheKey, data);
       return data;
     } catch (error) {
-      console.error(`Error fetching details for ${id}:`, error);
-      throw new Error(`Failed to fetch details for ${id}`);
+      // Retry once without api key and with lighter fields
+      try {
+        const response = await axios.get(`${this.baseUrl}/coins/${id}`, {
+          params: {
+            localization: false,
+            tickers: false,
+            market_data: true,
+            community_data: false,
+            developer_data: false,
+            sparkline: false
+          }
+        });
+        const data = response.data;
+        this.setCachedData(cacheKey, data);
+        return data;
+      } catch (e) {
+        // Final fallback to markets endpoint by id (minimal data) to bypass 429
+        try {
+          const res = await axios.get(`${this.baseUrl}/coins/markets`, {
+            params: { vs_currency: 'usd', ids: id }
+          });
+          const arr = res.data || [];
+          if (arr.length > 0) {
+            this.setCachedData(cacheKey, arr[0]);
+            return arr[0];
+          }
+        } catch {}
+        console.error(`Error fetching details for ${id}:`, error);
+        throw new Error(`Failed to fetch details for ${id}`);
+      }
     }
   }
 
