@@ -746,20 +746,25 @@
 
         // Force decrypt confidential balance with EIP-712 signature
         async function forceDecryptConfidentialBalance() {
+            console.log('🔐 forceDecryptConfidentialBalance() called');
             try {
                 if (!tokenContract || !userAddress) {
+                    console.log('❌ Contracts not initialized or wallet not connected');
                     throw new Error('Contracts not initialized or wallet not connected');
                 }
+                console.log('✅ Contracts and wallet are ready');
                 
                 // Set flag to allow decryption
                 window.userRequestedDecryption = true;
                 
                 // Use React app's FHEVM instance
                 const fhevmInstance = window.fhevm;
+                console.log('🔐 FHEVM instance:', fhevmInstance ? 'Available' : 'Not available');
                 if (!fhevmInstance) {
                     console.log('⚠️ FHEVM not available for decryption');
                     return;
                 }
+                console.log('✅ FHEVM instance is ready');
 
                 console.log('🔐 Force decrypting confidential balance using React app FHEVM...');
                 
@@ -801,11 +806,12 @@
                 console.log('🔐 Creating EIP-712 signature for decryption...');
                 console.log('🔐 MetaMask will show signature popup...');
                 
-                // Only proceed if user explicitly requested decryption
-                if (!window.userRequestedDecryption) {
-                    console.log('ℹ️ Decryption not explicitly requested by user, skipping...');
-                    return false;
-                }
+                // Always proceed with EIP-712 signature for FHEVM setup
+                console.log('🔐 Proceeding with EIP-712 signature for FHEVM setup...');
+                
+                console.log('🔐 Requesting EIP-712 signature from MetaMask...');
+                console.log('🔐 User address:', userAddress);
+                console.log('🔐 EIP-712 data:', JSON.stringify(eip712, null, 2));
                 
                 const signature = await window.ethereum.request({
                     method: 'eth_signTypedData_v4',
