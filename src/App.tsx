@@ -27,7 +27,6 @@ function App() {
 
   return (
     <div className="App">
-      <div style={{position:'fixed',top:0,left:0,right:0,padding:'6px 10px',background:'rgba(0,0,0,0.5)',color:'#00d4ff',fontSize:12,zIndex:9999}}>App loaded • If you only see this bar, report and I will investigate rendering.</div>
       <Toaster position="top-right" />
       <CompleteDashboard />
     </div>
