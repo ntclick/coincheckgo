@@ -50,6 +50,8 @@ export const CompleteDashboard: React.FC = () => {
   const [topLosers, setTopLosers] = useState<any[]>([]);
   const [countdownTimer, setCountdownTimer] = useState('');
   const [checkInStatus, setCheckInStatus] = useState<'not-checked' | 'ready' | 'completed' | 'loading'>('not-checked');
+  const [marketList, setMarketList] = useState<any[]>([]);
+  const [isLoadingMarket, setIsLoadingMarket] = useState(false);
   
   const [currentPage, setCurrentPage] = useState('home');
 
@@ -58,7 +60,8 @@ export const CompleteDashboard: React.FC = () => {
     { id: 'home', icon: '🏠', label: 'Home' },
     { id: 'swap', icon: '🔄', label: 'Swap' },
     { id: 'news', icon: '📰', label: 'News' },
-    { id: 'research', icon: '🔬', label: 'AI Research' }
+    { id: 'research', icon: '🔬', label: 'AI Research' },
+    { id: 'marketcap', icon: '📊', label: 'MarketCap' }
   ];
 
   // Helper function to get time ago
@@ -415,6 +418,20 @@ export const CompleteDashboard: React.FC = () => {
     }
   };
 
+  // Load Market Cap data (from CoinGecko via cryptoApiService)
+  const loadMarketCapData = async () => {
+    try {
+      setIsLoadingMarket(true);
+      const coins = await cryptoApiService.getTopCryptocurrencies(300);
+      setMarketList(coins);
+    } catch (err) {
+      console.error('Failed to load market cap data:', err);
+      setMarketList([]);
+    } finally {
+      setIsLoadingMarket(false);
+    }
+  };
+
   // Check on-chain daily check-in status
   const checkDailyCheckInStatus = async () => {
     if (!isConnected || !address) {
@@ -503,6 +520,13 @@ export const CompleteDashboard: React.FC = () => {
       window.removeEventListener('tokenBalancesUpdated', handleTokenBalancesUpdate);
     };
   }, [isConnected]);
+
+  // Load MarketCap data when navigating to tab
+  useEffect(() => {
+    if (currentPage === 'marketcap' && marketList.length === 0 && !isLoadingMarket) {
+      loadMarketCapData();
+    }
+  }, [currentPage]);
 
 
   // Countdown timer effect (reset at 07:00 UTC+7 == 00:00 UTC)
@@ -1878,6 +1902,71 @@ export const CompleteDashboard: React.FC = () => {
           <div className="page">
             {/* Debug log removed */}
             <AIResearchTool setCurrentPage={setCurrentPage} />
+          </div>
+        )}
+
+        {/* ========== MARKETCAP PAGE ========== */}
+        {currentPage === 'marketcap' && (
+          <div className="page">
+            <div className="page-header">
+              <h1>📊 Market Capitalization</h1>
+              <p>Top cryptocurrencies by market cap (live from CoinGecko)</p>
+            </div>
+            <div className="glass-card" style={{ padding: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
+                  Showing {marketList.length} assets
+                </div>
+                <button
+                  onClick={loadMarketCapData}
+                  disabled={isLoadingMarket}
+                  style={{
+                    background: 'linear-gradient(135deg, rgb(0, 212, 255), rgb(157, 78, 221))',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: 'white',
+                    padding: '8px 12px',
+                    cursor: isLoadingMarket ? 'not-allowed' : 'pointer',
+                    opacity: isLoadingMarket ? 0.7 : 1,
+                    fontSize: '12px'
+                  }}
+                >{isLoadingMarket ? '🔄 Loading...' : '🔄 Refresh'}</button>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>#</th>
+                      <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>Coin</th>
+                      <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>Price</th>
+                      <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>24h %</th>
+                      <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>Market Cap</th>
+                      <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>Volume 24h</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {marketList.map((c: any, idx: number) => (
+                      <tr key={c.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '8px', fontSize: '12px', color: 'rgba(255,255,255,0.8)' }}>{c.market_cap_rank ?? idx + 1}</td>
+                        <td style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {c.image && (
+                            <img src={c.image} alt={c.symbol} width={18} height={18} style={{ borderRadius: '50%' }} onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+                          )}
+                          <span style={{ fontSize: '12px', color: '#fff', fontWeight: 600 }}>{(c.symbol || '').toUpperCase()}</span>
+                          <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>{c.name}</span>
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#fff' }}>${(c.current_price ?? 0).toLocaleString()}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: (c.price_change_percentage_24h ?? 0) >= 0 ? '#00ff88' : '#ff4757' }}>
+                          {(c.price_change_percentage_24h ?? 0).toFixed(2)}%
+                        </td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#fff' }}>${(c.market_cap ?? 0).toLocaleString()}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontSize: '12px', color: '#fff' }}>${(c.total_volume ?? 0).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
         
