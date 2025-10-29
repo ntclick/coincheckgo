@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import useCoinCheckGoFHESimple from '../hooks/useCoinCheckGoFHE_Simple';
 import AIResearchTool from './AIResearchTool';
 import { toast } from 'react-hot-toast';
+import { cryptoApiService } from '../services/cryptoApiService';
 
 // Extend Window interface for swap functions and EIP-712
 declare global {
@@ -368,19 +369,50 @@ export const CompleteDashboard: React.FC = () => {
   const loadPublicData = () => {
     // Load crypto news (mock data for now)
     setNewsData(getStaticNews());
+  };
 
-    // Load top gainers/losers (mock data)
-    setTopGainers([
-      { symbol: 'BTC', name: 'Bitcoin', price: '$67,890', change: '+12.5%', changeType: 'up' },
-      { symbol: 'ETH', name: 'Ethereum', price: '$4,250', change: '+8.3%', changeType: 'up' },
-      { symbol: 'SOL', name: 'Solana', price: '$185', change: '+15.2%', changeType: 'up' },
-    ]);
-
-    setTopLosers([
-      { symbol: 'DOGE', name: 'Dogecoin', price: '$0.089', change: '-5.2%', changeType: 'down' },
-      { symbol: 'SHIB', name: 'Shiba Inu', price: '$0.000012', change: '-8.1%', changeType: 'down' },
-      { symbol: 'LTC', name: 'Litecoin', price: '$85', change: '-3.4%', changeType: 'down' },
-    ]);
+  // Load real top movers (CoinGecko)
+  const loadTopMovers = async () => {
+    try {
+      const coins = await cryptoApiService.getTopCryptocurrencies(300);
+      // Sort by 24h percentage change
+      const sorted = [...coins].filter(c => typeof c.price_change_percentage_24h === 'number');
+      const gainers = [...sorted]
+        .sort((a, b) => (b.price_change_percentage_24h || 0) - (a.price_change_percentage_24h || 0))
+        .slice(0, 10)
+        .map(c => ({
+          symbol: (c.symbol || '').toUpperCase(),
+          name: c.name,
+          price: `$${(c.current_price ?? 0).toLocaleString()}`,
+          change: `${(c.price_change_percentage_24h ?? 0).toFixed(2)}%`,
+          changeType: (c.price_change_percentage_24h ?? 0) >= 0 ? 'up' : 'down'
+        }));
+      const losers = [...sorted]
+        .sort((a, b) => (a.price_change_percentage_24h || 0) - (b.price_change_percentage_24h || 0))
+        .slice(0, 10)
+        .map(c => ({
+          symbol: (c.symbol || '').toUpperCase(),
+          name: c.name,
+          price: `$${(c.current_price ?? 0).toLocaleString()}`,
+          change: `${(c.price_change_percentage_24h ?? 0).toFixed(2)}%`,
+          changeType: (c.price_change_percentage_24h ?? 0) >= 0 ? 'up' : 'down'
+        }));
+      setTopGainers(gainers);
+      setTopLosers(losers);
+    } catch (err) {
+      console.error('Failed to load top movers from CoinGecko:', err);
+      // Fallback to existing mock if needed
+      setTopGainers([
+        { symbol: 'BTC', name: 'Bitcoin', price: '$67,890', change: '+12.5%', changeType: 'up' },
+        { symbol: 'ETH', name: 'Ethereum', price: '$4,250', change: '+8.3%', changeType: 'up' },
+        { symbol: 'SOL', name: 'Solana', price: '$185', change: '+15.2%', changeType: 'up' },
+      ]);
+      setTopLosers([
+        { symbol: 'DOGE', name: 'Dogecoin', price: '$0.089', change: '-5.2%', changeType: 'down' },
+        { symbol: 'SHIB', name: 'Shiba Inu', price: '$0.000012', change: '-8.1%', changeType: 'down' },
+        { symbol: 'LTC', name: 'Litecoin', price: '$85', change: '-3.4%', changeType: 'down' },
+      ]);
+    }
   };
 
   // Check on-chain daily check-in status
@@ -420,6 +452,8 @@ export const CompleteDashboard: React.FC = () => {
     loadPublicData();
     // Load news data
     fetchNewsData();
+    // Load real gainers/losers
+    loadTopMovers();
     
     if (isConnected) {
       loadAllData();
