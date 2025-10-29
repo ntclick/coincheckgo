@@ -1297,7 +1297,7 @@ export const CompleteDashboard: React.FC = () => {
 
             {/* Market Overview */}
             <div className="market-section">
-            <div className="market-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', padding: '10px', paddingTop: '10px', marginBottom: '100px' }}>
+            <div className="market-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', padding: '10px', paddingTop: '20px', marginBottom: '100px' }}>
                 {/* Top Gainers */}
                 <div className="glass-card">
                   <h3 style={{ color: '#00ff88', marginBottom: '10px', fontSize: '16px' }}>📈 Top Gainers</h3>
