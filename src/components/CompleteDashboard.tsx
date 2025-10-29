@@ -1277,7 +1277,7 @@ export const CompleteDashboard: React.FC = () => {
                 {/* Top Gainers */}
                 <div className="glass-card">
                   <h3 style={{ color: '#00ff88', marginBottom: '10px', fontSize: '16px' }}>📈 Top Gainers</h3>
-                  <div style={{ maxHeight: '140px', overflowY: 'auto' }}>
+                  <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                     {topGainers.map((coin, index) => (
                       <div key={index} style={{ 
                         display: 'flex', 
@@ -1306,7 +1306,7 @@ export const CompleteDashboard: React.FC = () => {
                 {/* Top Losers */}
                 <div className="glass-card">
                   <h3 style={{ color: '#ff4757', marginBottom: '10px', fontSize: '16px' }}>📉 Top Losers</h3>
-                  <div style={{ maxHeight: '140px', overflowY: 'auto' }}>
+                  <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                     {topLosers.map((coin, index) => (
                       <div key={index} style={{ 
                         display: 'flex', 
