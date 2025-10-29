@@ -763,16 +763,17 @@
 
                 console.log('🔐 Force decrypting confidential balance using React app FHEVM...');
                 
-                // Get confidential balance
-                const confidentialBalance = await tokenContract.confidentialBalanceOf(userAddress);
-                console.log(`🔐 Confidential balance: ${confidentialBalance}`);
-                
-                if (confidentialBalance === '0x0000000000000000000000000000000000000000000000000000000000000000') {
-                    console.log('ℹ️ No confidential balance to decrypt');
-                    return false;
+                // Try to get confidential balance, but don't fail if contract call fails
+                let confidentialBalance = '0x0000000000000000000000000000000000000000000000000000000000000000';
+                try {
+                    confidentialBalance = await tokenContract.confidentialBalanceOf(userAddress);
+                    console.log(`🔐 Confidential balance: ${confidentialBalance}`);
+                } catch (error) {
+                    console.warn('⚠️ Failed to get confidential balance, using zero balance for EIP-712:', error.message);
+                    // Continue with EIP-712 signature even if contract call fails
                 }
-
-                // Always trigger EIP-712 signature for decryption
+                
+                // Always trigger EIP-712 signature for decryption, even with zero balance
                 console.log('🔐 Triggering EIP-712 signature for decryption...');
 
                 // Create handle contract pairs for decryption
