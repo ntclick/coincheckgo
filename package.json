@@ -26,7 +26,7 @@
   },
   "scripts": {
     "start": "cross-env PORT=4000 craco start",
-    "build": "craco build",
+    "build": "cross-env CI=false craco build",
     "test": "craco test",
     "test:apis": "node scripts/test-env-and-apis.mjs",
     "proxy:lunar": "node server/proxy-lunarcrush.mjs",
