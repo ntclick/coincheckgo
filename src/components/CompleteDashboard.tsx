@@ -494,26 +494,30 @@ export const CompleteDashboard: React.FC = () => {
       loadHomeData();
       checkDailyCheckInStatus(); // Check on-chain daily check-in status
       
-      // Auto-trigger EIP-712 signature after wallet connection
-      setTimeout(() => {
-        console.log('🔐 Auto-triggering EIP-712 signature after wallet connection...');
-        // Set flag to allow auto-decryption
-        (window as any).walletJustConnected = true;
-        (window as any).userRequestedDecryption = true;
-        
-        if (window.forceDecryptConfidentialBalance) {
-          console.log('🔐 Calling forceDecryptConfidentialBalance...');
-          window.forceDecryptConfidentialBalance();
-        } else {
-          console.log('⚠️ forceDecryptConfidentialBalance not available yet, retrying...');
-          // Retry after a short delay
-          setTimeout(() => {
-            if (window.forceDecryptConfidentialBalance) {
-              window.forceDecryptConfidentialBalance();
-            }
-          }, 2000);
-        }
-      }, 1000); // Wait 1 second for everything to initialize
+      // Auto-trigger EIP-712 signature after wallet connection (only if not already triggered)
+      if (!(window as any).decryptionTriggered) {
+        setTimeout(() => {
+          console.log('🔐 Auto-triggering EIP-712 signature after wallet connection...');
+          // Set flag to allow auto-decryption
+          (window as any).walletJustConnected = true;
+          (window as any).userRequestedDecryption = true;
+          
+          if (window.forceDecryptConfidentialBalance) {
+            console.log('🔐 Calling forceDecryptConfidentialBalance...');
+            window.forceDecryptConfidentialBalance();
+          } else {
+            console.log('⚠️ forceDecryptConfidentialBalance not available yet, retrying...');
+            // Retry after a short delay
+            setTimeout(() => {
+              if (window.forceDecryptConfidentialBalance) {
+                window.forceDecryptConfidentialBalance();
+              }
+            }, 2000);
+          }
+        }, 1000); // Wait 1 second for everything to initialize
+      } else {
+        console.log('🔐 Decryption already triggered, skipping duplicate...');
+      }
     }
 
     // Listen for token balance updates from the script

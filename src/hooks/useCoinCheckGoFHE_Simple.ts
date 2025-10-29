@@ -188,27 +188,32 @@ const useCoinCheckGoFHESimple = () => {
       // Debug log removed
       await loadDataWithContracts(gmToken, swap, userAddress);
       
-      // Auto-trigger decryption after injected script is ready
-      console.log('🔐 Auto-triggering decryption...');
-      setTimeout(async () => {
-        try {
-          // Wait for injected script to be ready
-          let retries = 0;
-          while (retries < 10) {
-            if (window.forceDecryptConfidentialBalance) {
-              console.log('🔐 Injected script ready, triggering decryption...');
-              window.forceDecryptConfidentialBalance();
-              break;
+      // Auto-trigger decryption after injected script is ready (only if not already triggered)
+      if (!(window as any).decryptionTriggered) {
+        (window as any).decryptionTriggered = true;
+        console.log('🔐 Auto-triggering decryption...');
+        setTimeout(async () => {
+          try {
+            // Wait for injected script to be ready
+            let retries = 0;
+            while (retries < 10) {
+              if (window.forceDecryptConfidentialBalance) {
+                console.log('🔐 Injected script ready, triggering decryption...');
+                window.forceDecryptConfidentialBalance();
+                break;
+              }
+              console.log(`🔐 Waiting for injected script... (${retries + 1}/10)`);
+              await new Promise(resolve => setTimeout(resolve, 500));
+              retries++;
             }
-            console.log(`🔐 Waiting for injected script... (${retries + 1}/10)`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-            retries++;
+            console.log('✅ Auto-decryption triggered');
+          } catch (error) {
+            console.log('⚠️ Auto-decryption failed:', error);
           }
-          console.log('✅ Auto-decryption triggered');
-        } catch (error) {
-          console.log('⚠️ Auto-decryption failed:', error);
-        }
-      }, 2000);
+        }, 2000);
+      } else {
+        console.log('🔐 Decryption already triggered, skipping...');
+      }
       
       console.log('✅ Wallet connection successful');
       toast.success('Wallet connected successfully!');
@@ -242,6 +247,10 @@ const useCoinCheckGoFHESimple = () => {
     setResearchContract(null);
     setFhevmInitialized(false);
     setAclPermissionsGranted(false);
+    
+    // Reset decryption trigger flag
+    (window as any).decryptionTriggered = false;
+    
     toast.success('Wallet disconnected');
   };
 
