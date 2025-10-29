@@ -204,6 +204,9 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
         setResearchProgress('Fetching market data from CoinGecko...');
         const marketData = await cryptoApiService.getCryptoDetails(selectedCrypto!.id);
         
+        // Set the real market data to selectedCrypto for display
+        setSelectedCrypto(marketData);
+        
         setResearchProgress('Analyzing technical indicators with Taapi.io...');
         const technical = await taapiService.getTechnicalAnalysis(coinSymbol.toLowerCase());
         setTechnicalData(technical);
