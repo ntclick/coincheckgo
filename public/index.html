@@ -1132,6 +1132,24 @@
                 }
             }, 3000); // Wait 3 seconds for React app to connect wallet
             
+            // Gentle auto-connect once on first load if not connected (reduces blank state)
+            try {
+                if (window.ethereum && !window.ethereum.selectedAddress && !window.__ccgAutoConnectTried) {
+                    window.__ccgAutoConnectTried = true;
+                    setTimeout(async () => {
+                        try {
+                            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                            if (accounts && accounts.length > 0) {
+                                console.log('🔗 Auto-connect success:', accounts[0]);
+                                await initializeSwap();
+                            }
+                        } catch (e) {
+                            console.log('ℹ️ Auto-connect skipped/denied by user');
+                        }
+                    }, 2000);
+                }
+            } catch (_) {}
+
             // Listen for wallet connection events
             if (window.ethereum) {
                 window.ethereum.on('accountsChanged', async (accounts) => {
@@ -1161,6 +1179,58 @@
                 });
             }
         }
+
+        // Manual connect function (can be called from React)
+        window.requestWalletConnect = async function requestWalletConnect() {
+            if (!window.ethereum) {
+                console.log('❌ MetaMask not detected');
+                return false;
+            }
+            try {
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                if (accounts && accounts.length > 0) {
+                    console.log('🔗 Wallet connected via manual request:', accounts[0]);
+                    await initializeSwap();
+                    return true;
+                }
+            } catch (e) {
+                console.log('❌ Wallet connect rejected');
+            }
+            return false;
+        };
+
+        // Ensure Sepolia network
+        window.ensureSepolia = async function ensureSepolia() {
+            if (!window.ethereum) return;
+            try {
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                if (chainId !== '0xaa36a7') {
+                    try {
+                        await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: '0xaa36a7' }]
+                        });
+                        console.log('✅ Switched to Sepolia');
+                    } catch (switchError) {
+                        try {
+                            await window.ethereum.request({
+                                method: 'wallet_addEthereumChain',
+                                params: [{
+                                    chainId: '0xaa36a7',
+                                    chainName: 'Sepolia',
+                                    nativeCurrency: { name: 'SepoliaETH', symbol: 'ETH', decimals: 18 },
+                                    rpcUrls: ['https://eth-sepolia.g.alchemy.com/v2/demo'],
+                                    blockExplorerUrls: ['https://sepolia.etherscan.io']
+                                }]
+                            });
+                            console.log('✅ Added Sepolia');
+                        } catch (addError) {
+                            console.log('⚠️ Could not switch/add Sepolia');
+                        }
+                    }
+                }
+            } catch (_) {}
+        };
 
         // Start waiting for wallet connection instead of auto-initializing
         waitForWalletConnection();
