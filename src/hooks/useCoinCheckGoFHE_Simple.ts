@@ -362,8 +362,18 @@ const useCoinCheckGoFHESimple = () => {
   // Load data with contracts
   const loadDataWithContracts = async (gmContract: any, swapContract: any, userAddress: string, forceReload: boolean = false) => {
     try {
-      // Debug log removed
-      // Debug logs removed
+      // Verify contract is deployed
+      try {
+        const code = await provider.getCode(gmContract.target);
+        if (code === '0x') {
+          console.error('❌ GM Token contract not deployed at address:', gmContract.target);
+          return;
+        }
+        console.log('✅ GM Token contract verified at:', gmContract.target);
+      } catch (error) {
+        console.error('❌ Failed to verify contract deployment:', error);
+        return;
+      }
       
       // Load token info (guard against non-standard or failing name/symbol)
       let name = '';
@@ -376,20 +386,29 @@ const useCoinCheckGoFHESimple = () => {
       try { const ts = await gmContract.totalSupply(); totalSupply = Number(ethers.formatEther(ts)); } catch { /* ignore */ }
       setTokenInfo({ name, symbol, decimals, totalSupply });
       
-      // Load encrypted balance (best-effort)
-      try {
-        const encryptedBalance = await gmContract.confidentialBalanceOf(userAddress);
-        setUserEncryptedBalance(encryptedBalance);
-      } catch { setUserEncryptedBalance(''); }
+      // Load encrypted balance (best-effort) - only if FHEVM is ready
+      if (fhevmInitialized) {
+        try {
+          const encryptedBalance = await gmContract.confidentialBalanceOf(userAddress);
+          setUserEncryptedBalance(encryptedBalance);
+          console.log(`🔐 Encrypted Balance: ${encryptedBalance}`);
+        } catch (error: any) {
+          console.warn('⚠️ Failed to load confidential balance:', error.message);
+          setUserEncryptedBalance('');
+        }
+      } else {
+        console.log('⚠️ FHEVM not initialized, skipping confidential balance');
+        setUserEncryptedBalance('');
+      }
       
       // Load public balance
       try {
-        const publicBalance = await gmContract.balanceOf(userAddress);
+        const publicBalance = await gmContract.publicBalances(userAddress);
         const publicBalanceFormatted = Number(ethers.formatEther(publicBalance));
         setUserPublicBalance(publicBalanceFormatted);
         globalHookState.userPublicBalance = publicBalanceFormatted;
         notifyGlobalStateChange(); // Notify all listeners
-        // Debug log removed
+        console.log(`💰 Public Balance: ${publicBalanceFormatted} GM`);
       } catch (balanceError) {
         console.log('⚠️ Failed to load public balance, using default 0');
         setUserPublicBalance(0);
