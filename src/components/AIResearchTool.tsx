@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import useCoinCheckGoFHESimple from '../hooks/useCoinCheckGoFHE_Simple';
 import { cryptoApiService, CryptoData } from '../services/cryptoApiService';
 import { taapiService, TechnicalAnalysis } from '../services/taapiService';
-import { cryptoCompareService, CcSocialSentiment as SocialSentiment } from '../services/cryptoCompareService';
+import { cryptoRankService, CryptoRankFundamentals } from '../services/cryptoRankService';
 import { aiReportService, AIReport } from '../services/aiReportService';
 import TechnicalChart from './TechnicalChart';
 import CryptoSearchSimple from './CryptoSearchSimple';
@@ -70,7 +70,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
   // API data states
   const [topCryptos, setTopCryptos] = useState<CryptoData[]>([]);
   const [technicalData, setTechnicalData] = useState<TechnicalAnalysis | null>(null);
-  const [sentimentData, setSentimentData] = useState<SocialSentiment | null>(null);
+  const [fundamentalsData, setFundamentalsData] = useState<CryptoRankFundamentals | null>(null);
   const [isLoadingCryptos, setIsLoadingCryptos] = useState(false);
 
   // Load top 300 cryptocurrencies on component mount
@@ -211,22 +211,22 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
         const technical = await taapiService.getTechnicalAnalysis(coinSymbol.toLowerCase());
         setTechnicalData(technical);
         
-        setResearchProgress('Processing social sentiment with CryptoCompare...');
-        const sentiment = await cryptoCompareService.getSocialSentiment(coinSymbol.toLowerCase());
-        setSentimentData(sentiment);
+        setResearchProgress('Fetching fundamentals from CryptoRank...');
+        const fundamentals = await cryptoRankService.getFundamentals(coinSymbol.toLowerCase());
+        setFundamentalsData(fundamentals);
         
         setResearchProgress('Generating AI report with OpenAI...');
         console.log('🔍 Generating AI report with data:', {
           coinSymbol,
           marketData: marketData ? 'Available' : 'Missing',
           technical: technical ? 'Available' : 'Missing',
-          sentiment: sentiment ? 'Available' : 'Missing'
+          fundamentals: fundamentals ? 'Available' : 'Missing'
         });
         const aiReport = await aiReportService.generateReport(
           coinSymbol,
           marketData,
           technical,
-          sentiment
+          fundamentals
         );
         console.log('✅ AI report generated successfully:', aiReport);
         
@@ -1007,12 +1007,12 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
             </div>
           </div>
 
-          {/* Social Sentiment Analysis */}
+          {/* Fundamentals Analysis */}
           <div className="glass-card" style={{ marginBottom: '24px', padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-              <div style={{ fontSize: '24px', marginRight: '12px' }}>😊</div>
+              <div style={{ fontSize: '24px', marginRight: '12px' }}>🏗️</div>
               <h3 style={{ color: 'rgb(0, 212, 255)', margin: '0', fontSize: '20px', fontWeight: 'bold' }}>
-                Social Sentiment Analysis
+                Fundamentals Analysis
               </h3>
             </div>
             
@@ -1021,64 +1021,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
               gap: '20px'
             }}>
-              {/* Sentiment Score Card */}
-              <div style={{
-                background: (sentimentData?.sentiment_score || 0) > 0 
-                  ? 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))' 
-                  : (sentimentData?.sentiment_score || 0) < 0 
-                    ? 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))'
-                    : 'linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: `1px solid ${(sentimentData?.sentiment_score || 0) > 0 ? 'rgba(0, 255, 136, 0.3)' : (sentimentData?.sentiment_score || 0) < 0 ? 'rgba(255, 68, 68, 0.3)' : 'rgba(255, 184, 0, 0.3)'}`,
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: (sentimentData?.sentiment_score || 0) > 0 ? 'rgba(0, 255, 136, 0.1)' : (sentimentData?.sentiment_score || 0) < 0 ? 'rgba(255, 68, 68, 0.1)' : 'rgba(255, 184, 0, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Sentiment Score
-                </div>
-                <div style={{ 
-                  color: (sentimentData?.sentiment_score || 0) > 0 ? '#00ff88' : (sentimentData?.sentiment_score || 0) < 0 ? '#ff4444' : '#ffb800',
-                  fontSize: '32px', 
-                  fontWeight: 'bold',
-                  marginBottom: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  {(sentimentData?.sentiment_score || 0) > 0 ? '😊' : (sentimentData?.sentiment_score || 0) < 0 ? '😞' : '😐'}
-                  {sentimentData?.sentiment_score?.toFixed(1) || 'N/A'}
-                </div>
-                <div style={{ 
-                  color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  Range: -100 to +100
-                </div>
-                <div style={{ 
-                  marginTop: '8px',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)'
-                }}>
-                  {sentimentData?.sentiment_score ? 
-                    (sentimentData.sentiment_score > 20 ? 'Very Bullish' : 
-                     sentimentData.sentiment_score > 5 ? 'Bullish' :
-                     sentimentData.sentiment_score > -5 ? 'Neutral' :
-                     sentimentData.sentiment_score > -20 ? 'Bearish' : 'Very Bearish') : 'N/A'}
-                </div>
-              </div>
-
-              {/* Social Volume Card */}
+              {/* Circulating Supply Card */}
               <div style={{
                 background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.05))',
                 borderRadius: '12px',
@@ -1097,91 +1040,25 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
                   borderRadius: '50%' 
                 }} />
                 <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Social Volume
+                  Circulating Supply
                 </div>
                 <div style={{ 
                   color: 'white', 
-                  fontSize: '28px', 
-                  fontWeight: 'bold',
-                  marginBottom: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  📢 {sentimentData?.social_volume ? (sentimentData.social_volume / 1000).toFixed(0) + 'K' : 'N/A'}
-                </div>
-                <div style={{ 
-                  color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  Mentions (24h)
-                </div>
-                <div style={{ 
-                  marginTop: '8px',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)'
-                }}>
-                  {sentimentData?.social_volume ? 
-                    (sentimentData.social_volume > 50000 ? 'High Activity' : 
-                     sentimentData.social_volume > 10000 ? 'Moderate Activity' : 'Low Activity') : 'N/A'}
-                </div>
-              </div>
-
-              {/* Social Sentiment Card */}
-              <div style={{
-                background: sentimentData?.social_sentiment === 'BULLISH' 
-                  ? 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))' 
-                  : sentimentData?.social_sentiment === 'BEARISH' 
-                    ? 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))'
-                    : 'linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: `1px solid ${sentimentData?.social_sentiment === 'BULLISH' ? 'rgba(0, 255, 136, 0.3)' : sentimentData?.social_sentiment === 'BEARISH' ? 'rgba(255, 68, 68, 0.3)' : 'rgba(255, 184, 0, 0.3)'}`,
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: sentimentData?.social_sentiment === 'BULLISH' ? 'rgba(0, 255, 136, 0.1)' : sentimentData?.social_sentiment === 'BEARISH' ? 'rgba(255, 68, 68, 0.1)' : 'rgba(255, 184, 0, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Social Sentiment
-                </div>
-                <div style={{ 
-                  color: sentimentData?.social_sentiment === 'BULLISH' ? '#00ff88' : sentimentData?.social_sentiment === 'BEARISH' ? '#ff4444' : '#ffb800', 
                   fontSize: '24px', 
                   fontWeight: 'bold',
-                  marginBottom: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+                  marginBottom: '4px'
                 }}>
-                  {sentimentData?.social_sentiment === 'BULLISH' ? '🚀' : sentimentData?.social_sentiment === 'BEARISH' ? '📉' : '➡️'}
-                  {sentimentData?.social_sentiment || 'N/A'}
+                  {fundamentalsData?.circulating_supply ? `${(fundamentalsData.circulating_supply / 1e6).toFixed(1)}M` : 'N/A'}
                 </div>
                 <div style={{ 
                   color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
+                  fontSize: '12px'
                 }}>
-                  Buzz Score: {sentimentData?.buzz_score?.toFixed(1) || 'N/A'}
-                </div>
-                <div style={{ 
-                  marginTop: '8px',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)'
-                }}>
-                  Community Mood
+                  Tokens in circulation
                 </div>
               </div>
 
-              {/* Alt Rank Card */}
+              {/* Market Dominance Card */}
               <div style={{
                 background: 'linear-gradient(135deg, rgba(157, 78, 221, 0.1), rgba(157, 78, 221, 0.05))',
                 borderRadius: '12px',
@@ -1200,35 +1077,95 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
                   borderRadius: '50%' 
                 }} />
                 <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Alt Rank
+                  Market Dominance
                 </div>
                 <div style={{ 
                   color: 'white', 
-                  fontSize: '28px', 
+                  fontSize: '24px', 
                   fontWeight: 'bold',
-                  marginBottom: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+                  marginBottom: '4px'
                 }}>
-                  🏆 #{sentimentData?.alt_rank || 'N/A'}
+                  {fundamentalsData?.market_cap_dominance?.toFixed(2) || '0.00'}%
                 </div>
                 <div style={{ 
                   color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
+                  fontSize: '12px'
                 }}>
-                  Social Ranking
+                  Of total crypto market
+                </div>
+              </div>
+
+              {/* All-Time High Card */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))',
+                borderRadius: '12px',
+                padding: '20px',
+                border: '1px solid rgba(0, 255, 136, 0.3)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <div style={{ 
+                  position: 'absolute', 
+                  top: '-10px', 
+                  right: '-10px', 
+                  width: '40px', 
+                  height: '40px', 
+                  background: 'rgba(0, 255, 136, 0.1)', 
+                  borderRadius: '50%' 
+                }} />
+                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                  All-Time High
                 </div>
                 <div style={{ 
-                  marginTop: '8px',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)'
+                  color: 'white', 
+                  fontSize: '24px', 
+                  fontWeight: 'bold',
+                  marginBottom: '4px'
                 }}>
-                  {sentimentData?.alt_rank ? 
-                    (sentimentData.alt_rank <= 10 ? 'Top 10' : 
-                     sentimentData.alt_rank <= 50 ? 'Top 50' : 
-                     sentimentData.alt_rank <= 100 ? 'Top 100' : 'Lower Rank') : 'N/A'}
+                  ${fundamentalsData?.ath?.toFixed(2) || 'N/A'}
+                </div>
+                <div style={{ 
+                  color: 'rgba(255, 255, 255, 0.6)', 
+                  fontSize: '12px'
+                }}>
+                  {fundamentalsData?.ath_change_percentage ? `${fundamentalsData.ath_change_percentage.toFixed(2)}% from ATH` : 'N/A'}
+                </div>
+              </div>
+
+              {/* All-Time Low Card */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))',
+                borderRadius: '12px',
+                padding: '20px',
+                border: '1px solid rgba(255, 68, 68, 0.3)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <div style={{ 
+                  position: 'absolute', 
+                  top: '-10px', 
+                  right: '-10px', 
+                  width: '40px', 
+                  height: '40px', 
+                  background: 'rgba(255, 68, 68, 0.1)', 
+                  borderRadius: '50%' 
+                }} />
+                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                  All-Time Low
+                </div>
+                <div style={{ 
+                  color: 'white', 
+                  fontSize: '24px', 
+                  fontWeight: 'bold',
+                  marginBottom: '4px'
+                }}>
+                  ${fundamentalsData?.atl?.toFixed(2) || 'N/A'}
+                </div>
+                <div style={{ 
+                  color: 'rgba(255, 255, 255, 0.6)', 
+                  fontSize: '12px'
+                }}>
+                  {fundamentalsData?.atl_change_percentage ? `${fundamentalsData.atl_change_percentage.toFixed(2)}% from ATL` : 'N/A'}
                 </div>
               </div>
             </div>
@@ -1430,20 +1367,6 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
                 </p>
               </div>
 
-              {/* Sentiment Analysis */}
-              <div style={{
-                background: 'rgba(0, 0, 0, 0.2)',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(0, 212, 255, 0.2)'
-              }}>
-                <h4 style={{ color: 'rgb(0, 212, 255)', margin: '0 0 12px 0', fontSize: '16px', fontWeight: 'bold' }}>
-                  😊 Sentiment Analysis
-                </h4>
-                <p style={{ color: 'rgba(255, 255, 255, 0.8)', lineHeight: '1.6', margin: '0', fontSize: '14px' }}>
-                  {researchData.sentiment_analysis}
-                </p>
-              </div>
             </div>
 
             {/* Risk Assessment & Opportunities */}
