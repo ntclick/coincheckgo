@@ -924,23 +924,12 @@
             if (window.retryFHEVMInit && window.fhevm && userAddress) {
                 console.log('🔄 Retrying FHEVM initialization...');
                 try {
-                    // Check if user has confidential balance first and wallet is connected
-                    if (tokenContract && userAddress) {
-                        const confidentialBalance = await tokenContract.confidentialBalanceOf(userAddress);
-                        console.log(`🔐 Checking confidential balance: ${confidentialBalance}`);
-                        
-                        if (confidentialBalance !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
-                            if (!eip712Signed) {
-                                console.log('🔐 User has confidential balance, triggering EIP-712 signature...');
-                                // Force decrypt confidential balance now that FHEVM is available
-                                await forceDecryptConfidentialBalance();
-                                console.log('✅ FHEVM retry initialization completed');
-                            } else {
-                                console.log('ℹ️ EIP-712 already signed in this session, skipping re-sign.');
-                            }
-                        } else {
-                            console.log('ℹ️ No confidential balance to decrypt');
-                        }
+                    if (!eip712Signed) {
+                        console.log('🔐 Triggering EIP-712 without balance pre-check...');
+                        await forceDecryptConfidentialBalance();
+                        console.log('✅ FHEVM retry initialization completed');
+                    } else {
+                        console.log('ℹ️ EIP-712 already signed in this session, skipping re-sign.');
                     }
                     window.retryFHEVMInit = false; // Stop retrying after this attempt
                 } catch (error) {
