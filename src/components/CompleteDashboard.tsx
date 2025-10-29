@@ -211,9 +211,24 @@ export const CompleteDashboard: React.FC = () => {
       
       for (const feedUrl of rssFeeds) {
         try {
-          // Use CORS proxy for RSS feeds
+          // Use CORS proxy for RSS feeds with timeout
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(feedUrl)}`;
-          const response = await fetch(proxyUrl);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+          
+          const response = await fetch(proxyUrl, {
+            signal: controller.signal,
+            headers: {
+              'Accept': 'application/rss+xml, application/xml, text/xml',
+            }
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
           const xmlText = await response.text();
           
           // Parse XML to extract news items
@@ -293,8 +308,9 @@ export const CompleteDashboard: React.FC = () => {
               imageUrl
             });
           });
-        } catch (error) {
-          console.error(`Error fetching ${feedUrl}:`, error);
+        } catch (error: any) {
+          console.warn(`⚠️ RSS feed failed [${feedUrl}]:`, error.message || error);
+          // Continue with other feeds even if one fails
         }
       }
       
