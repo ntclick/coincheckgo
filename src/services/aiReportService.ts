@@ -18,13 +18,11 @@ export interface AIReport {
 }
 
 class AIReportService {
-  private apiKey: string;
   private baseUrl: string;
   private model: string;
 
   constructor() {
-    this.apiKey = process.env.REACT_APP_OPENAI_API_KEY || '';
-    this.baseUrl = process.env.REACT_APP_OPENAI_API_URL || 'https://api.openai.com/v1';
+    this.baseUrl = '/api/openai';
     this.model = process.env.REACT_APP_OPENAI_MODEL || 'gpt-4-mini';
     // Respect mock flag for OpenAI fallback
     (this as any).allowMock = (process.env.REACT_APP_ALLOW_MOCK ?? 'true').toLowerCase() !== 'false';
@@ -36,15 +34,7 @@ class AIReportService {
     technicalData: any,
     fundamentalsData: any
   ): Promise<AIReport> {
-    // If no API key, return a mock report only if allowed
-    if (!this.apiKey) {
-      console.warn('OpenAI API key not configured.');
-      if ((this as any).allowMock) {
-        console.warn('Returning mock report due to missing key.');
-        return this.generateMockReport(symbol, marketData, technicalData, fundamentalsData);
-      }
-      throw new Error('OpenAI API key not configured');
-    }
+    // Key is handled server-side via backend proxy
 
     const prompt = this.buildPrompt(symbol, marketData, technicalData, fundamentalsData);
 
@@ -56,7 +46,7 @@ class AIReportService {
           messages: [
             {
               role: 'system',
-              content: 'You are a professional cryptocurrency analyst. Provide comprehensive, data-driven analysis with clear recommendations.'
+              content: `You are a senior crypto market research expert with the ability to translate dry data and charts into insights that feel vivid, human, and even a little bit emotional. Write clear, vivid, concise research reports, but always:\n- Be warm, supportive, and honest, like talking to a friend.\n- Use relatable analogies/metaphors and call out emotional or market psychology angles.\n- End every summary with a one-sentence actionable takeaway.\n- Inject empathy and real feelings about the market without losing core facts.\n\nAll data and explanations must be accurate, but your report must feel written by a human with market intuition, not a robot or AI."`
             },
             {
               role: 'user',
@@ -65,11 +55,6 @@ class AIReportService {
           ],
           max_tokens: 2000,
           temperature: 0.7
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${this.apiKey}`
-          }
         }
       );
 
@@ -214,6 +199,8 @@ Format as JSON with these exact keys: summary, technical_analysis, fundamental_a
     const marketCapDominance = fundamentalsData?.market_cap_dominance || 0;
     const ath = fundamentalsData?.ath || 0;
     const athChange = fundamentalsData?.ath_change_percentage || 0;
+    const atl = fundamentalsData?.atl || 0;
+    const atlChange = fundamentalsData?.atl_change_percentage || 0;
     
     // Calculate recommendation based on multiple factors
     type Recommendation = 'BUY' | 'HOLD' | 'SELL';

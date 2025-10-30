@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import useCoinCheckGoFHESimple from '../hooks/useCoinCheckGoFHE_Simple';
 import { cryptoApiService, CryptoData } from '../services/cryptoApiService';
 import { taapiService, TechnicalAnalysis } from '../services/taapiService';
-import { cryptoRankService, CryptoRankFundamentals } from '../services/cryptoRankService';
+import { cryptoRankService, CryptoRankFundamentals, getTopFunds } from '../services/cryptoRankService';
 import { aiReportService, AIReport } from '../services/aiReportService';
-import TechnicalChart from './TechnicalChart';
 import CryptoSearchSimple from './CryptoSearchSimple';
 import TradingViewChart from './TradingViewChart';
 import './OriginalDesign.css';
@@ -43,6 +42,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
     isConnected,
     address: userAddress,
     isLoading,
+    isResearching,
     connectWallet,
     performResearch,
     fundResearchPool,
@@ -62,7 +62,6 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
   // Form states
   const [selectedCrypto, setSelectedCrypto] = useState<CryptoData | null>(null);
   const [coinSymbol, setCoinSymbol] = useState('');
-  const [isResearching, setIsResearching] = useState(false);
   const [researchProgress, setResearchProgress] = useState('');
   const [researchData, setResearchData] = useState<AIReport | null>(null);
   const [researchError, setResearchError] = useState<string>('');
@@ -72,6 +71,14 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
   const [technicalData, setTechnicalData] = useState<TechnicalAnalysis | null>(null);
   const [fundamentalsData, setFundamentalsData] = useState<CryptoRankFundamentals | null>(null);
   const [isLoadingCryptos, setIsLoadingCryptos] = useState(false);
+  const [showFunds, setShowFunds] = useState(false);
+  const [fundsList, setFundsList] = useState<any[]>([]);
+
+  // Safe number formatter
+  const fmt = (value: any, decimals: number = 2) => {
+    const num = typeof value === 'bigint' ? Number(value) : Number(value);
+    return Number.isFinite(num) ? num.toFixed(decimals) : 'N/A';
+  };
 
   // Load top 300 cryptocurrencies on component mount
   useEffect(() => {
@@ -84,7 +91,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
           const coins = (localData.coins || localData.default?.coins || []) as CryptoData[];
           if (Array.isArray(coins) && coins.length > 0) {
             setTopCryptos(prev => (prev && prev.length > 0 ? prev : (coins as any)));
-            console.log(`✅ Loaded ${coins.length} cryptocurrencies from local JSON`);
+            // console.log(`✅ Loaded ${coins.length} cryptocurrencies from local JSON`);
           }
         } catch {}
 
@@ -96,8 +103,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
           for (const c of cryptos) if ((c as any)?.id) byId.set((c as any).id, c);
           return Array.from(byId.values()).slice(0, 300);
         });
-        console.log(`✅ Loaded ${cryptos.length} cryptocurrencies from CoinGecko`);
-        console.log('📊 Top 10 cryptos:', cryptos.slice(0, 10).map(c => `${c.symbol.toUpperCase()} - ${c.name}`));
+        // console.log(`✅ Loaded ${cryptos.length} cryptocurrencies from CoinGecko`);
       } catch (error) {
         console.error('Error loading cryptocurrencies:', error);
         try {
@@ -105,7 +111,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
           const coins = (localData.coins || localData.default?.coins || []) as CryptoData[];
           if (coins.length > 0) {
             setTopCryptos(coins as any);
-            console.log(`✅ Loaded ${coins.length} cryptocurrencies from local JSON`);
+            // console.log(`✅ Loaded ${coins.length} cryptocurrencies from local JSON`);
           } else {
             setResearchError('Failed to load cryptocurrency data');
           }
@@ -125,87 +131,71 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
     return 10; // 10 GM tokens for research
   };
 
-  // Check if user has enough GM tokens
-  const hasEnoughTokens = () => {
-    // Use global state directly since hook state is not syncing
-    const globalBalance = (window as any).globalHookState?.userPublicBalance;
-    const windowBalance = (window as any).userPublicBalance;
-    const balance = globalBalance || windowBalance || userPublicBalance;
-    
-    if (!balance) {
-      console.log('🔍 hasEnoughTokens: No balance available');
-      return false;
-    }
-    
-    const requiredTokens = getTokenCost();
-    const currentBalance = typeof balance === 'string' 
-      ? parseFloat(balance) 
-      : balance;
-    const hasEnough = currentBalance >= requiredTokens;
-    
-    // Debug log removed
-    
-    return hasEnough;
-  };
-
-  // Get current balance for display - use global state directly
-  const getCurrentBalance = () => {
-    const globalBalance = (window as any).globalHookState?.userPublicBalance;
-    const windowBalance = (window as any).userPublicBalance;
-    return globalBalance || windowBalance || userPublicBalance || 0;
-  };
 
   // Handle crypto selection
   const handleCryptoSelect = (crypto: CryptoData) => {
     setSelectedCrypto(crypto);
     setCoinSymbol(crypto.symbol);
-    console.log('🔍 Crypto selected:', crypto.symbol);
+    // console.log('🔍 Crypto selected:', crypto.symbol);
   };
 
-  // Allow research without wallet; only disable when no coin or processing
-  const buttonDisabled = isResearching || !coinSymbol;
+  // Disable button when: no coin selected, not connected, or researching
+  const buttonDisabled = !isConnected || !coinSymbol || isResearching;
 
-  // AI Research function - REAL ON-CHAIN TRANSACTION
+  // AI Research function - NORMAL TRANSACTION WITH ONCHAIN CHECK
   const handleResearch = async () => {
-    // Check if coin is selected
+    // Validate prerequisites
     if (!coinSymbol) {
       alert('Please select a coin first');
       return;
     }
 
-    const walletConnected = isWalletConnected();
-    console.log('🚀 Starting research', { walletConnected });
+    if (!isConnected) {
+      return;
+    }
 
-    setIsResearching(true);
+    console.log('🚀 Starting research for:', coinSymbol);
+
     setResearchError('');
     setResearchData(null);
-    setResearchProgress('Connecting to blockchain...');
+    setResearchProgress('Preparing transaction...');
 
     try {
-      // If wallet connected, try on-chain step; otherwise skip to data fetch
-      if (walletConnected && performResearch) {
-        setResearchProgress('Sending transaction to blockchain...');
-        const tx = await performResearch(1);
-        console.log('📤 Research transaction sent:', tx?.hash);
-        setResearchProgress('Waiting for transaction confirmation...');
-        await tx?.wait();
-        console.log('✅ Research transaction confirmed');
-      } else {
-        console.log('ℹ️ Wallet not connected or on-chain step unavailable; proceeding with off-chain research');
+      // Execute on-chain research transaction with FHE signature
+      // This will handle EIP-712 signing, balance check, and on-chain confirmation
+      const tx = await performResearch(1);
+
+      // If transaction failed or was cancelled, stop here
+      if (!tx) {
+        console.log('❌ Research transaction failed or was cancelled');
+        setResearchProgress('');
+        return;
       }
 
-      // Fetch real API data
+      console.log('✅ Research transaction confirmed on-chain:', tx.hash);
+      setResearchProgress('On-chain transaction confirmed - proceeding with analysis...');
+
+      // Now proceed with API data fetching (only after successful on-chain transaction)
       setResearchProgress('Fetching market data from CoinGecko...');
       const marketData = await cryptoApiService.getCryptoDetails(selectedCrypto!.id);
+      await new Promise(r => setTimeout(r, 400));
       setSelectedCrypto(marketData);
 
       setResearchProgress('Analyzing technical indicators with Taapi.io...');
       const technical = await taapiService.getTechnicalAnalysis(coinSymbol.toLowerCase());
+      await new Promise(r => setTimeout(r, 400));
       setTechnicalData(technical);
 
       setResearchProgress('Fetching fundamentals from CryptoRank...');
       const fundamentals = await cryptoRankService.getFundamentals(coinSymbol.toLowerCase());
+      await new Promise(r => setTimeout(r, 400));
       setFundamentalsData(fundamentals);
+
+      let funds = [];
+      if (showFunds) {
+        funds = await getTopFunds(coinSymbol.toLowerCase());
+        setFundsList(funds);
+      }
 
       setResearchProgress('Generating AI report with OpenAI...');
       const aiReport = await aiReportService.generateReport(
@@ -215,14 +205,13 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
         fundamentals
       );
       setResearchData(aiReport);
-      setResearchProgress('✅ Research completed.');
+      setResearchProgress('✅ Research completed successfully!');
     } catch (error: any) {
       console.error('Research failed:', error);
       setResearchError(`Research failed: ${error.message || error}`);
-    } finally {
-      setIsResearching(false);
       setResearchProgress('');
     }
+    // Note: Don't set setIsResearching(false) here - it's handled in the hook
   };
 
   const handleExport = (format: 'pdf' | 'json' | 'markdown') => {
@@ -280,7 +269,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
       </div>
 
       {/* Main Input Bar */}
-      <div className="glass-card" style={{ marginBottom: '24px', padding: '20px', height: '300px' }}>
+      <div className="glass-card" style={{ marginBottom: '24px', padding: '20px', minHeight: '450px' }}>
         <h2 style={{
           color: 'rgb(0, 212, 255)',
           marginBottom: '16px',
@@ -295,9 +284,9 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '2fr auto',
-          gap: '20px',
-          alignItems: 'end'
+          gridTemplateColumns: '1fr auto',
+          gap: '16px',
+          alignItems: 'center'
         }}>
           <div>
             <label style={{
@@ -318,13 +307,13 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
           </div>
           <button
             onClick={() => {
-              console.log('🔍 Button clicked!', {
-                isResearching,
-                isConnected: isWalletConnected(),
-                coinSymbol,
-                hasEnoughTokens: hasEnoughTokens(),
-                userPublicBalance
-              });
+              // console.log('🔍 Button clicked!', {
+              //   isResearching,
+              //   isConnected: isWalletConnected(),
+              //   coinSymbol,
+              //   hasEnoughTokens: hasEnoughTokens(),
+              //   userPublicBalance
+              // });
               handleResearch();
             }}
             disabled={buttonDisabled}
@@ -366,24 +355,6 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
           </div>
         )}
 
-        {/* Token Balance Info */}
-        {isWalletConnected() && (
-          <div style={{
-            marginTop: '8px',
-            padding: '8px 12px',
-            background: 'rgba(0, 0, 0, 0.2)',
-            borderRadius: '6px',
-            border: '1px solid rgba(0, 212, 255, 0.2)',
-            fontSize: '12px',
-            color: hasEnoughTokens() ? 'rgba(0, 255, 136, 0.8)' : 'rgba(255, 184, 0, 0.8)'
-          }}>
-            {hasEnoughTokens() ? (
-              `✅ You have ${getCurrentBalance()} GM tokens (${getTokenCost()} GM required)`
-            ) : (
-              `⚠️ You need ${getTokenCost()} GM tokens (Current: ${getCurrentBalance()} GM)`
-            )}
-          </div>
-        )}
       </div>
 
       {/* Loading Screen */}
@@ -475,135 +446,129 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
               {/* Price Card */}
-              <div style={{ 
-                background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.05))', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                border: '1px solid rgba(0, 212, 255, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
+              {selectedCrypto?.current_price != null ? (
                 <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(0, 212, 255, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Current Price
+                  background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.05))', 
+                  borderRadius: '12px', 
+                  padding: '20px', 
+                  border: '1px solid rgba(0, 212, 255, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(0, 212, 255, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    Current Price
+                  </div>
+                  <div style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    ${selectedCrypto.current_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </div>
                 </div>
-                <div style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>
-                  {selectedCrypto?.current_price ? `$${selectedCrypto.current_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : 'N/A'}
-                </div>
-                <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '12px' }}>
-                  USD
-                </div>
-              </div>
+              ) : null}
 
               {/* 24h Change Card */}
-              <div style={{ 
-                background: (selectedCrypto?.price_change_percentage_24h || 0) >= 0 
-                  ? 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))' 
-                  : 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                border: `1px solid ${(selectedCrypto?.price_change_percentage_24h || 0) >= 0 ? 'rgba(0, 255, 136, 0.3)' : 'rgba(255, 68, 68, 0.3)'}`,
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
+              {selectedCrypto?.price_change_percentage_24h !== undefined ? (
                 <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: (selectedCrypto?.price_change_percentage_24h || 0) >= 0 ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 68, 68, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  24h Change
-                </div>
-                <div style={{ 
-                  color: (selectedCrypto?.price_change_percentage_24h || 0) >= 0 ? '#00ff88' : '#ff4444', 
-                  fontSize: '24px', 
-                  fontWeight: 'bold',
-                  marginBottom: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
+                  background: (selectedCrypto.price_change_percentage_24h || 0) >= 0 
+                    ? 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))' 
+                    : 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))', 
+                  borderRadius: '12px', 
+                  padding: '20px', 
+                  border: `1px solid ${(selectedCrypto.price_change_percentage_24h || 0) >= 0 ? 'rgba(0, 255, 136, 0.3)' : 'rgba(255, 68, 68, 0.3)'}`,
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  {(selectedCrypto?.price_change_percentage_24h || 0) >= 0 ? '↗️' : '↘️'}
-                  {selectedCrypto?.price_change_percentage_24h !== undefined ? `${selectedCrypto.price_change_percentage_24h.toFixed(2)}%` : 'N/A'}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: (selectedCrypto.price_change_percentage_24h || 0) >= 0 ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 68, 68, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    24h Change
+                  </div>
+                  <div style={{ 
+                    color: (selectedCrypto.price_change_percentage_24h || 0) >= 0 ? '#00ff88' : '#ff4444', 
+                    fontSize: '24px', 
+                    fontWeight: 'bold',
+                    marginBottom: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    {(selectedCrypto.price_change_percentage_24h || 0) >= 0 ? '↗️' : '↘️'}
+                    {selectedCrypto.price_change_percentage_24h !== undefined ? `${fmt(selectedCrypto.price_change_percentage_24h,2)}%` : 'N/A'}
+                  </div>
                 </div>
-                <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '12px' }}>
-                  Last 24 hours
-                </div>
-              </div>
+              ) : null}
 
               {/* Volume Card */}
-              <div style={{ 
-                background: 'linear-gradient(135deg, rgba(157, 78, 221, 0.1), rgba(157, 78, 221, 0.05))', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                border: '1px solid rgba(157, 78, 221, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
+              {selectedCrypto?.total_volume ? (
                 <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(157, 78, 221, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Trading Volume
+                  background: 'linear-gradient(135deg, rgba(157, 78, 221, 0.1), rgba(157, 78, 221, 0.05))', 
+                  borderRadius: '12px', 
+                  padding: '20px', 
+                  border: '1px solid rgba(157, 78, 221, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(157, 78, 221, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    Trading Volume
+                  </div>
+                  <div style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    {selectedCrypto.total_volume >= 1e9 ? 
+                      `$${fmt(selectedCrypto.total_volume / 1e9,1)}B` : 
+                      `$${fmt(selectedCrypto.total_volume / 1e6,0)}M`}
+                  </div>
                 </div>
-                <div style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>
-                  {selectedCrypto?.total_volume ? 
-                    (selectedCrypto.total_volume >= 1e9 ? 
-                      `$${(selectedCrypto.total_volume / 1e9).toFixed(1)}B` : 
-                      `$${(selectedCrypto.total_volume / 1e6).toFixed(0)}M`) : 
-                    'N/A'}
-                </div>
-                <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '12px' }}>
-                  24h volume
-                </div>
-              </div>
+              ) : null}
 
               {/* Market Cap Card */}
-              <div style={{ 
-                background: 'linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05))', 
-                borderRadius: '12px', 
-                padding: '20px', 
-                border: '1px solid rgba(255, 184, 0, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
+              {selectedCrypto?.market_cap ? (
                 <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(255, 184, 0, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Market Cap
+                  background: 'linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05))', 
+                  borderRadius: '12px', 
+                  padding: '20px', 
+                  border: '1px solid rgba(255, 184, 0, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(255, 184, 0, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    Market Cap
+                  </div>
+                  <div style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    ${selectedCrypto.market_cap.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </div>
                 </div>
-                <div style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>
-                  {selectedCrypto?.market_cap ? `$${(selectedCrypto.market_cap / 1e9).toFixed(1)}B` : 'N/A'}
-                </div>
-                <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '12px' }}>
-                  Rank #{selectedCrypto?.market_cap_rank || 'N/A'}
-                </div>
-              </div>
+              ) : null}
             </div>
           </div>
 
@@ -697,237 +662,247 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               gap: '20px'
             }}>
               {/* RSI Card */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(0, 212, 255, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(0, 212, 255, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  RSI (14)
-                </div>
-                <div style={{ 
-                  color: (technicalData?.rsi?.value ?? 0) > 70 ? '#ff4444' : (technicalData?.rsi?.value ?? 0) < 30 ? '#00ff88' : 'white',
-                  fontSize: '28px', 
-                  fontWeight: 'bold',
-                  marginBottom: '8px'
+              {technicalData?.rsi?.value !== undefined ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(0, 212, 255, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  {technicalData?.rsi?.value?.toFixed(1) || 'N/A'}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(0, 212, 255, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    RSI (14)
+                  </div>
+                  <div style={{ 
+                    color: (technicalData.rsi.value > 70 ? '#ff4444' : technicalData.rsi.value < 30 ? '#00ff88' : 'white'),
+                    fontSize: '28px', 
+                    fontWeight: 'bold',
+                    marginBottom: '8px'
+                  }}>
+                    {fmt(technicalData.rsi.value,1) || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    color: (technicalData.rsi.value > 70 ? '#ff4444' : technicalData.rsi.value < 30 ? '#00ff88' : 'rgba(255, 255, 255, 0.6)'),
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}>
+                    {technicalData.rsi.signal || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    marginTop: '8px',
+                    fontSize: '10px',
+                    color: 'rgba(255, 255, 255, 0.5)'
+                  }}>
+                    {technicalData.rsi.value ? 
+                      (technicalData.rsi.value > 70 ? 'Overbought' : 
+                       technicalData.rsi.value < 30 ? 'Oversold' : 'Neutral') : 'N/A'}
+                  </div>
                 </div>
-                <div style={{ 
-                  color: (technicalData?.rsi?.value ?? 0) > 70 ? '#ff4444' : (technicalData?.rsi?.value ?? 0) < 30 ? '#00ff88' : 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  {technicalData?.rsi?.signal || 'N/A'}
-                </div>
-                <div style={{ 
-                  marginTop: '8px',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)'
-                }}>
-                  {technicalData?.rsi?.value ? 
-                    (technicalData.rsi.value > 70 ? 'Overbought' : 
-                     technicalData.rsi.value < 30 ? 'Oversold' : 'Neutral') : 'N/A'}
-                </div>
-              </div>
+              ) : null}
 
               {/* MACD Card */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(157, 78, 221, 0.1), rgba(157, 78, 221, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(157, 78, 221, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(157, 78, 221, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  MACD
-                </div>
-                <div style={{ 
-                  color: technicalData?.macd?.signal_type === 'BUY' ? '#00ff88' : technicalData?.macd?.signal_type === 'SELL' ? '#ff4444' : 'white',
-                  fontSize: '24px', 
-                  fontWeight: 'bold',
-                  marginBottom: '8px'
+              {technicalData?.macd?.signal_type !== undefined ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(157, 78, 221, 0.1), rgba(157, 78, 221, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(157, 78, 221, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  {technicalData?.macd?.macd?.toFixed(3) || 'N/A'}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(157, 78, 221, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    MACD
+                  </div>
+                  <div style={{ 
+                    color: technicalData.macd.signal_type === 'BUY' ? '#00ff88' : technicalData.macd.signal_type === 'SELL' ? '#ff4444' : 'white',
+                    fontSize: '24px', 
+                    fontWeight: 'bold',
+                    marginBottom: '8px'
+                  }}>
+                    {fmt(technicalData.macd.macd,3) || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    color: technicalData.macd.signal_type === 'BUY' ? '#00ff88' : technicalData.macd.signal_type === 'SELL' ? '#ff4444' : 'rgba(255, 255, 255, 0.6)', 
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}>
+                    {technicalData.macd.signal_type || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    marginTop: '8px',
+                    fontSize: '10px',
+                    color: 'rgba(255, 255, 255, 0.5)'
+                  }}>
+                    Signal: {fmt(technicalData.macd.signal,3) || 'N/A'}
+                  </div>
                 </div>
-                <div style={{ 
-                  color: technicalData?.macd?.signal_type === 'BUY' ? '#00ff88' : technicalData?.macd?.signal_type === 'SELL' ? '#ff4444' : 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  {technicalData?.macd?.signal_type || 'N/A'}
-                </div>
-                <div style={{ 
-                  marginTop: '8px',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)'
-                }}>
-                  Signal: {technicalData?.macd?.signal?.toFixed(3) || 'N/A'}
-                </div>
-              </div>
+              ) : null}
 
               {/* EMA Trend Card */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(255, 184, 0, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(255, 184, 0, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  EMA Trend
-                </div>
-                <div style={{ 
-                  color: technicalData?.ema?.trend === 'BULLISH' ? '#00ff88' : technicalData?.ema?.trend === 'BEARISH' ? '#ff4444' : 'white',
-                  fontSize: '24px', 
-                  fontWeight: 'bold',
-                  marginBottom: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
+              {technicalData?.ema?.trend !== undefined ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(255, 184, 0, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  {technicalData?.ema?.trend === 'BULLISH' ? '📈' : technicalData?.ema?.trend === 'BEARISH' ? '📉' : '➡️'}
-                  {technicalData?.ema?.trend || 'N/A'}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(255, 184, 0, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    EMA Trend
+                  </div>
+                  <div style={{ 
+                    color: technicalData.ema.trend === 'BULLISH' ? '#00ff88' : technicalData.ema.trend === 'BEARISH' ? '#ff4444' : 'white',
+                    fontSize: '24px', 
+                    fontWeight: 'bold',
+                    marginBottom: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    {technicalData.ema.trend === 'BULLISH' ? '📈' : technicalData.ema.trend === 'BEARISH' ? '📉' : '➡️'}
+                    {technicalData.ema.trend || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    color: 'rgba(255, 255, 255, 0.6)', 
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}>
+                    EMA 50: ${fmt(technicalData.ema.ema_50,2) || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    marginTop: '4px',
+                    fontSize: '10px',
+                    color: 'rgba(255, 255, 255, 0.5)'
+                  }}>
+                    EMA 200: ${fmt(technicalData.ema.ema_200,2) || 'N/A'}
+                  </div>
                 </div>
-                <div style={{ 
-                  color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  EMA 50: ${technicalData?.ema?.ema_50?.toFixed(2) || 'N/A'}
-                </div>
-                <div style={{ 
-                  marginTop: '4px',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)'
-                }}>
-                  EMA 200: ${technicalData?.ema?.ema_200?.toFixed(2) || 'N/A'}
-                </div>
-              </div>
+              ) : null}
 
               {/* Bollinger Bands Card */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(0, 255, 136, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(0, 255, 136, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Bollinger Bands
-                </div>
-                <div style={{ 
-                  color: technicalData?.bollinger_bands?.position === 'OVERBOUGHT' ? '#ff4444' : technicalData?.bollinger_bands?.position === 'OVERSOLD' ? '#00ff88' : 'white',
-                  fontSize: '24px', 
-                  fontWeight: 'bold',
-                  marginBottom: '8px'
+              {technicalData?.bollinger_bands?.position !== undefined ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(0, 255, 136, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  {technicalData?.bollinger_bands?.position || 'N/A'}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(0, 255, 136, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    Bollinger Bands
+                  </div>
+                  <div style={{ 
+                    color: technicalData.bollinger_bands.position === 'OVERBOUGHT' ? '#ff4444' : technicalData.bollinger_bands.position === 'OVERSOLD' ? '#00ff88' : 'white',
+                    fontSize: '24px', 
+                    fontWeight: 'bold',
+                    marginBottom: '8px'
+                  }}>
+                    {technicalData.bollinger_bands.position || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    color: 'rgba(255, 255, 255, 0.6)', 
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}>
+                    Upper: ${fmt(technicalData.bollinger_bands.upper,2) || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    marginTop: '4px',
+                    fontSize: '10px',
+                    color: 'rgba(255, 255, 255, 0.5)'
+                  }}>
+                    Lower: ${fmt(technicalData.bollinger_bands.lower,2) || 'N/A'}
+                  </div>
                 </div>
-                <div style={{ 
-                  color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  Upper: ${technicalData?.bollinger_bands?.upper?.toFixed(2) || 'N/A'}
-                </div>
-                <div style={{ 
-                  marginTop: '4px',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)'
-                }}>
-                  Lower: ${technicalData?.bollinger_bands?.lower?.toFixed(2) || 'N/A'}
-                </div>
-              </div>
+              ) : null}
 
               {/* ADX Card */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(255, 68, 68, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(255, 68, 68, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  ADX (Trend Strength)
-                </div>
-                <div style={{ 
-                  color: technicalData?.adx?.trend_strength === 'STRONG' ? '#00ff88' : technicalData?.adx?.trend_strength === 'WEAK' ? '#ff4444' : 'white',
-                  fontSize: '28px', 
-                  fontWeight: 'bold',
-                  marginBottom: '8px'
+              {technicalData?.adx?.trend_strength !== undefined ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(255, 68, 68, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  {technicalData?.adx?.value?.toFixed(1) || 'N/A'}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(255, 68, 68, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    ADX (Trend Strength)
+                  </div>
+                  <div style={{ 
+                    color: technicalData.adx.trend_strength === 'STRONG' ? '#00ff88' : technicalData.adx.trend_strength === 'WEAK' ? '#ff4444' : 'white',
+                    fontSize: '28px', 
+                    fontWeight: 'bold',
+                    marginBottom: '8px'
+                  }}>
+                    {fmt(technicalData.adx.value,1) || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    color: technicalData.adx.trend_strength === 'STRONG' ? '#00ff88' : technicalData.adx.trend_strength === 'WEAK' ? '#ff4444' : 'rgba(255, 255, 255, 0.6)', 
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}>
+                    {technicalData.adx.trend_strength || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    marginTop: '8px',
+                    fontSize: '10px',
+                    color: 'rgba(255, 255, 255, 0.5)'
+                  }}>
+                    {technicalData.adx.value ? 
+                      (technicalData.adx.value > 50 ? 'Strong Trend' : 
+                       technicalData.adx.value > 25 ? 'Moderate Trend' : 'Weak Trend') : 'N/A'}
+                  </div>
                 </div>
-                <div style={{ 
-                  color: technicalData?.adx?.trend_strength === 'STRONG' ? '#00ff88' : technicalData?.adx?.trend_strength === 'WEAK' ? '#ff4444' : 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  {technicalData?.adx?.trend_strength || 'N/A'}
-                </div>
-                <div style={{ 
-                  marginTop: '8px',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)'
-                }}>
-                  {technicalData?.adx?.value ? 
-                    (technicalData.adx.value > 50 ? 'Strong Trend' : 
-                     technicalData.adx.value > 25 ? 'Moderate Trend' : 'Weak Trend') : 'N/A'}
-                </div>
-              </div>
+              ) : null}
             </div>
           </div>
 
@@ -939,46 +914,39 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
               gap: '16px'
             }}>
-              <div style={{
-                background: 'rgba(0, 0, 0, 0.2)',
-                borderRadius: '8px',
-                padding: '16px',
-                border: '1px solid rgba(0, 212, 255, 0.2)',
-                minHeight: '60px'
-              }}>
-                <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '12px' }}>TVL</div>
-                <div style={{ color: 'white', fontSize: '18px', fontWeight: 'bold' }}>
-                  ${selectedCrypto?.market_cap ? (selectedCrypto.market_cap / 1e9).toFixed(1) + 'B' : 'N/A'}
-                </div>
-              </div>
-              <div style={{
-                background: 'rgba(0, 0, 0, 0.2)',
-                borderRadius: '8px',
-                padding: '16px',
-                border: '1px solid rgba(0, 212, 255, 0.2)',
-                minHeight: '60px'
-              }}>
-                <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '12px' }}>TVL 7d Change</div>
-                <div style={{ 
-                  color: (selectedCrypto?.price_change_percentage_7d || 0) >= 0 ? '#00ff88' : '#ff4444', 
-                  fontSize: '16px', 
-                  fontWeight: 'bold' 
+              {selectedCrypto?.market_cap ? (
+                <div style={{
+                  background: 'rgba(0, 0, 0, 0.2)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  border: '1px solid rgba(0, 212, 255, 0.2)',
+                  minHeight: '60px'
                 }}>
-                  {(selectedCrypto?.price_change_percentage_7d || 0).toFixed(1)}%
+                  <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '12px' }}>TVL</div>
+                  <div style={{ color: 'white', fontSize: '18px', fontWeight: 'bold' }}>
+                    ${fmt(selectedCrypto.market_cap / 1e9, 1) + 'B'}
+                  </div>
                 </div>
-              </div>
-              <div style={{
-                background: 'rgba(0, 0, 0, 0.2)',
-                borderRadius: '8px',
-                padding: '16px',
-                border: '1px solid rgba(0, 212, 255, 0.2)',
-                minHeight: '60px'
-              }}>
-                <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '12px' }}>Next Unlock</div>
-                <div style={{ color: 'white', fontSize: '18px', fontWeight: 'bold' }}>
-                  N/A
+              ) : null}
+              {selectedCrypto?.price_change_percentage_7d !== undefined ? (
+                <div style={{
+                  background: 'rgba(0, 0, 0, 0.2)',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  border: '1px solid rgba(0, 212, 255, 0.2)',
+                  minHeight: '60px'
+                }}>
+                  <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '12px' }}>TVL 7d Change</div>
+                  <div style={{ 
+                    color: (selectedCrypto.price_change_percentage_7d || 0) >= 0 ? '#00ff88' : '#ff4444', 
+                    fontSize: '16px', 
+                    fontWeight: 'bold' 
+                  }}>
+                    {fmt(selectedCrypto.price_change_percentage_7d||0,1)}%
+                  </div>
                 </div>
-              </div>
+              ) : null}
+              {/* fundamentalsData.unlock_next card removed; property does not exist */}
             </div>
           </div>
 
@@ -997,153 +965,176 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               gap: '20px'
             }}>
               {/* Circulating Supply Card */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(0, 212, 255, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(0, 212, 255, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Circulating Supply
-                </div>
-                <div style={{ 
-                  color: 'white', 
-                  fontSize: '24px', 
-                  fontWeight: 'bold',
-                  marginBottom: '4px'
+              {fundamentalsData?.circulating_supply ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(0, 212, 255, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  {fundamentalsData?.circulating_supply ? `${(fundamentalsData.circulating_supply / 1e6).toFixed(1)}M` : 'N/A'}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(0, 212, 255, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    Circulating Supply
+                  </div>
+                  <div style={{ 
+                    color: 'white', 
+                    fontSize: '24px', 
+                    fontWeight: 'bold',
+                    marginBottom: '4px'
+                  }}>
+                    {fmt(fundamentalsData.circulating_supply / 1e6,1) + 'M'}
+                  </div>
+                  <div style={{ 
+                    color: 'rgba(255, 255, 255, 0.6)', 
+                    fontSize: '12px'
+                  }}>
+                    Tokens in circulation
+                  </div>
                 </div>
-                <div style={{ 
-                  color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px'
-                }}>
-                  Tokens in circulation
-                </div>
-              </div>
+              ) : null}
 
               {/* Market Dominance Card */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(157, 78, 221, 0.1), rgba(157, 78, 221, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(157, 78, 221, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(157, 78, 221, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Market Dominance
-                </div>
-                <div style={{ 
-                  color: 'white', 
-                  fontSize: '24px', 
-                  fontWeight: 'bold',
-                  marginBottom: '4px'
+              {fundamentalsData?.market_cap_dominance !== undefined ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(157, 78, 221, 0.1), rgba(157, 78, 221, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(157, 78, 221, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  {fundamentalsData?.market_cap_dominance?.toFixed(2) || '0.00'}%
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(157, 78, 221, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    Market Dominance
+                  </div>
+                  <div style={{ 
+                    color: 'white', 
+                    fontSize: '24px', 
+                    fontWeight: 'bold',
+                    marginBottom: '4px'
+                  }}>
+                    {fmt(fundamentalsData.market_cap_dominance,2) || '0.00'}%
+                  </div>
+                  <div style={{ 
+                    color: 'rgba(255, 255, 255, 0.6)', 
+                    fontSize: '12px'
+                  }}>
+                    Of total crypto market
+                  </div>
                 </div>
-                <div style={{ 
-                  color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px'
-                }}>
-                  Of total crypto market
-                </div>
-              </div>
+              ) : null}
 
               {/* All-Time High Card */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(0, 255, 136, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(0, 255, 136, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  All-Time High
-                </div>
-                <div style={{ 
-                  color: 'white', 
-                  fontSize: '24px', 
-                  fontWeight: 'bold',
-                  marginBottom: '4px'
+              {fundamentalsData?.ath ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(0, 255, 136, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  ${fundamentalsData?.ath?.toFixed(2) || 'N/A'}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(0, 255, 136, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    All-Time High
+                  </div>
+                  <div style={{ 
+                    color: 'white', 
+                    fontSize: '24px', 
+                    fontWeight: 'bold',
+                    marginBottom: '4px'
+                  }}>
+                    ${fmt(fundamentalsData.ath,2) || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    color: 'rgba(255, 255, 255, 0.6)', 
+                    fontSize: '12px'
+                  }}>
+                    {fundamentalsData.ath_change_percentage ? `${fmt(fundamentalsData.ath_change_percentage,2)}% from ATH` : 'N/A'}
+                  </div>
                 </div>
-                <div style={{ 
-                  color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px'
-                }}>
-                  {fundamentalsData?.ath_change_percentage ? `${fundamentalsData.ath_change_percentage.toFixed(2)}% from ATH` : 'N/A'}
-                </div>
-              </div>
+              ) : null}
 
               {/* All-Time Low Card */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(255, 68, 68, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(255, 68, 68, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  All-Time Low
-                </div>
-                <div style={{ 
-                  color: 'white', 
-                  fontSize: '24px', 
-                  fontWeight: 'bold',
-                  marginBottom: '4px'
+              {fundamentalsData?.atl ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(255, 68, 68, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  ${fundamentalsData?.atl?.toFixed(2) || 'N/A'}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(255, 68, 68, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    All-Time Low
+                  </div>
+                  <div style={{ 
+                    color: 'white', 
+                    fontSize: '24px', 
+                    fontWeight: 'bold',
+                    marginBottom: '4px'
+                  }}>
+                    ${fmt(fundamentalsData.atl,2) || 'N/A'}
+                  </div>
+                  <div style={{ 
+                    color: 'rgba(255, 255, 255, 0.6)', 
+                    fontSize: '12px'
+                  }}>
+                    {fundamentalsData.atl_change_percentage ? `${fmt(fundamentalsData.atl_change_percentage,2)}% from ATL` : 'N/A'}
+                  </div>
                 </div>
-                <div style={{ 
-                  color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px'
-                }}>
-                  {fundamentalsData?.atl_change_percentage ? `${fundamentalsData.atl_change_percentage.toFixed(2)}% from ATL` : 'N/A'}
+              ) : null}
+            </div>
+          </div>
+
+          {/* Add CSS animations */}
+          <div style={{margin:'18px 0'}}>
+            <label style={{fontWeight:600}}><input type="checkbox" checked={showFunds} onChange={()=>setShowFunds(v=>!v)}/> Show top funds invested (CryptoRank)</label>
+            {showFunds && fundsList.length > 0 && (
+              <div className="glass-card" style={{padding:'15px 10px',margin:'10px 0',fontSize:'13px'}}>
+                <h4 style={{color:'#00d4ff',margin:'0 0 8px'}}>Top Investing Funds</h4>
+                <div style={{display:'flex',flexWrap:'wrap',gap:'10px'}}>
+                  {fundsList.map(f=>(<span key={f.id} style={{background:'rgba(0,212,255,0.07)',padding:'3px 10px',borderRadius:'7px',border:'1px solid #09f2',color:'#eee',display:'inline-block'}}>
+                    <b>{f.name}</b> <span style={{opacity:.7}}>{f.investment_stage}</span> <span style={{color:'#fffd6e'}}>{f.project_count}</span>
+                  </span>))}
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* AI Research Report */}
@@ -1168,7 +1159,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
                   📋 Executive Summary
                 </h4>
                 <p style={{ color: 'white', lineHeight: '1.6', margin: '0', fontSize: '14px' }}>
-                  {researchData.summary}
+                  {typeof researchData.summary === 'object' ? JSON.stringify(researchData.summary) : String(researchData.summary || 'N/A')}
                 </p>
               </div>
             </div>
@@ -1181,143 +1172,149 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               marginBottom: '24px'
             }}>
               {/* AI Confidence Score */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(0, 255, 136, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(0, 255, 136, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  AI Confidence Score
-                </div>
-                <div style={{ 
-                  color: getScoreColor(researchData.confidence_score), 
-                  fontSize: '36px', 
-                  fontWeight: 'bold',
-                  marginBottom: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+              {researchData.confidence_score !== undefined ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(0, 255, 136, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  🎯 {researchData.confidence_score}/100
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(0, 255, 136, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    AI Confidence Score
+                  </div>
+                  <div style={{ 
+                    color: getScoreColor(researchData.confidence_score), 
+                    fontSize: '36px', 
+                    fontWeight: 'bold',
+                    marginBottom: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    🎯 {researchData.confidence_score}/100
+                  </div>
+                  <div style={{ 
+                    color: 'rgba(255, 255, 255, 0.6)', 
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}>
+                    {researchData.confidence_score >= 80 ? 'Very High Confidence' :
+                     researchData.confidence_score >= 60 ? 'High Confidence' :
+                     researchData.confidence_score >= 40 ? 'Moderate Confidence' : 'Low Confidence'}
+                  </div>
                 </div>
-                <div style={{ 
-                  color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  {researchData.confidence_score >= 80 ? 'Very High Confidence' :
-                   researchData.confidence_score >= 60 ? 'High Confidence' :
-                   researchData.confidence_score >= 40 ? 'Moderate Confidence' : 'Low Confidence'}
-                </div>
-              </div>
+              ) : null}
 
               {/* Trading Recommendation */}
-              <div style={{
-                background: getRecommendationColor(researchData.recommendation) === '#00ff88' 
-                  ? 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))' 
-                  : getRecommendationColor(researchData.recommendation) === '#ff4444'
-                    ? 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))'
-                    : 'linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: `1px solid ${getRecommendationColor(researchData.recommendation) === '#00ff88' ? 'rgba(0, 255, 136, 0.3)' : getRecommendationColor(researchData.recommendation) === '#ff4444' ? 'rgba(255, 68, 68, 0.3)' : 'rgba(255, 184, 0, 0.3)'}`,
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: getRecommendationColor(researchData.recommendation) === '#00ff88' ? 'rgba(0, 255, 136, 0.1)' : getRecommendationColor(researchData.recommendation) === '#ff4444' ? 'rgba(255, 68, 68, 0.1)' : 'rgba(255, 184, 0, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Trading Recommendation
-                </div>
-                <div style={{ 
-                  color: getRecommendationColor(researchData.recommendation), 
-                  fontSize: '32px', 
-                  fontWeight: 'bold',
-                  marginBottom: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+              {researchData.recommendation !== undefined ? (
+                <div style={{
+                  background: getRecommendationColor(researchData.recommendation) === '#00ff88' 
+                    ? 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))' 
+                    : getRecommendationColor(researchData.recommendation) === '#ff4444'
+                      ? 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))'
+                      : 'linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: `1px solid ${getRecommendationColor(researchData.recommendation) === '#00ff88' ? 'rgba(0, 255, 136, 0.3)' : getRecommendationColor(researchData.recommendation) === '#ff4444' ? 'rgba(255, 68, 68, 0.3)' : 'rgba(255, 184, 0, 0.3)'}`,
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  {researchData.recommendation === 'BUY' ? '🚀' : researchData.recommendation === 'SELL' ? '📉' : '⏸️'}
-                  {researchData.recommendation}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: getRecommendationColor(researchData.recommendation) === '#00ff88' ? 'rgba(0, 255, 136, 0.1)' : getRecommendationColor(researchData.recommendation) === '#ff4444' ? 'rgba(255, 68, 68, 0.1)' : 'rgba(255, 184, 0, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    Trading Recommendation
+                  </div>
+                  <div style={{ 
+                    color: getRecommendationColor(researchData.recommendation), 
+                    fontSize: '32px', 
+                    fontWeight: 'bold',
+                    marginBottom: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    {researchData.recommendation === 'BUY' ? '🚀' : researchData.recommendation === 'SELL' ? '📉' : '⏸️'}
+                    {researchData.recommendation}
+                  </div>
+                  <div style={{ 
+                    color: 'rgba(255, 255, 255, 0.6)', 
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}>
+                    {researchData.recommendation === 'BUY' ? 'Bullish Outlook' : 
+                     researchData.recommendation === 'SELL' ? 'Bearish Outlook' : 'Neutral Position'}
+                  </div>
                 </div>
-                <div style={{ 
-                  color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  {researchData.recommendation === 'BUY' ? 'Bullish Outlook' : 
-                   researchData.recommendation === 'SELL' ? 'Bearish Outlook' : 'Neutral Position'}
-                </div>
-              </div>
+              ) : null}
 
               {/* Price Targets */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(157, 78, 221, 0.1), rgba(157, 78, 221, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(157, 78, 221, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  top: '-10px', 
-                  right: '-10px', 
-                  width: '40px', 
-                  height: '40px', 
-                  background: 'rgba(157, 78, 221, 0.1)', 
-                  borderRadius: '50%' 
-                }} />
-                <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
-                  Price Targets
-                </div>
-                <div style={{ 
-                  color: 'white', 
-                  fontSize: '24px', 
-                  fontWeight: 'bold',
-                  marginBottom: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+              {researchData.price_targets ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(157, 78, 221, 0.1), rgba(157, 78, 221, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(157, 78, 221, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}>
-                  🎯 ${researchData.price_targets?.short_term?.toFixed(2) || 'N/A'}
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(157, 78, 221, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    Price Targets
+                  </div>
+                  <div style={{ 
+                    color: 'white', 
+                    fontSize: '24px', 
+                    fontWeight: 'bold',
+                    marginBottom: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    🎯 ${fmt(researchData.price_targets.short_term, 2)}
+                  </div>
+                  <div style={{ 
+                    color: 'rgba(255, 255, 255, 0.6)', 
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}>
+                    Short-term target
+                  </div>
+                  <div style={{ 
+                    marginTop: '8px',
+                    fontSize: '10px',
+                    color: 'rgba(255, 255, 255, 0.5)'
+                  }}>
+                    Medium: ${fmt(researchData.price_targets.medium_term, 2)} | 
+                    Long: ${fmt(researchData.price_targets.long_term, 2)}
+                  </div>
                 </div>
-                <div style={{ 
-                  color: 'rgba(255, 255, 255, 0.6)', 
-                  fontSize: '12px',
-                  fontWeight: '500'
-                }}>
-                  Short-term target
-                </div>
-                <div style={{ 
-                  marginTop: '8px',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)'
-                }}>
-                  Medium: ${researchData.price_targets?.medium_term?.toFixed(2) || 'N/A'} | 
-                  Long: ${researchData.price_targets?.long_term?.toFixed(2) || 'N/A'}
-                </div>
-              </div>
+              ) : null}
             </div>
 
             {/* Detailed Analysis */}
@@ -1328,19 +1325,21 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               marginBottom: '24px'
             }}>
               {/* Technical Analysis */}
-              <div style={{
-                background: 'rgba(0, 0, 0, 0.2)',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(0, 212, 255, 0.2)'
-              }}>
-                <h4 style={{ color: 'rgb(0, 212, 255)', margin: '0 0 12px 0', fontSize: '16px', fontWeight: 'bold' }}>
-                  📊 Technical Analysis
-                </h4>
-                <p style={{ color: 'rgba(255, 255, 255, 0.8)', lineHeight: '1.6', margin: '0', fontSize: '14px' }}>
-                  {researchData.technical_analysis}
-                </p>
-              </div>
+              {typeof researchData.technical_analysis === 'object' ? (
+                <div style={{
+                  background: 'rgba(0, 0, 0, 0.2)',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(0, 212, 255, 0.2)'
+                }}>
+                  <h4 style={{ color: 'rgb(0, 212, 255)', margin: '0 0 12px 0', fontSize: '16px', fontWeight: 'bold' }}>
+                    📊 Technical Analysis
+                  </h4>
+                  <p style={{ color: 'rgba(255, 255, 255, 0.8)', lineHeight: '1.6', margin: '0', fontSize: '14px' }}>
+                    {JSON.stringify(researchData.technical_analysis) || 'N/A'}
+                  </p>
+                </div>
+              ) : null}
 
             </div>
 
@@ -1352,38 +1351,42 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               marginBottom: '24px'
             }}>
               {/* Key Risks */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(255, 68, 68, 0.3)'
-              }}>
-                <h4 style={{ color: '#ff4444', margin: '0 0 12px 0', fontSize: '16px', fontWeight: 'bold' }}>
-                  ⚠️ Key Risks
-                </h4>
-                <ul style={{ color: 'rgba(255, 255, 255, 0.8)', margin: '0', paddingLeft: '20px', fontSize: '14px', lineHeight: '1.6' }}>
-                  {researchData.key_risks.map((risk, index) => (
-                    <li key={index} style={{ marginBottom: '6px' }}>{risk}</li>
-                  ))}
-                </ul>
-              </div>
+              {researchData.key_risks && researchData.key_risks.length > 0 ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(255, 68, 68, 0.3)'
+                }}>
+                  <h4 style={{ color: '#ff4444', margin: '0 0 12px 0', fontSize: '16px', fontWeight: 'bold' }}>
+                    ⚠️ Key Risks
+                  </h4>
+                  <ul style={{ color: 'rgba(255, 255, 255, 0.8)', margin: '0', paddingLeft: '20px', fontSize: '14px', lineHeight: '1.6' }}>
+                    {researchData.key_risks.map((risk, index) => (
+                      <li key={index} style={{ marginBottom: '6px' }}>{risk}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
 
               {/* Key Opportunities */}
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))',
-                borderRadius: '12px',
-                padding: '20px',
-                border: '1px solid rgba(0, 255, 136, 0.3)'
-              }}>
-                <h4 style={{ color: '#00ff88', margin: '0 0 12px 0', fontSize: '16px', fontWeight: 'bold' }}>
-                  🚀 Key Opportunities
-                </h4>
-                <ul style={{ color: 'rgba(255, 255, 255, 0.8)', margin: '0', paddingLeft: '20px', fontSize: '14px', lineHeight: '1.6' }}>
-                  {researchData.key_opportunities.map((opportunity, index) => (
-                    <li key={index} style={{ marginBottom: '6px' }}>{opportunity}</li>
-                  ))}
-                </ul>
-              </div>
+              {researchData.key_opportunities && researchData.key_opportunities.length > 0 ? (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(0, 255, 136, 0.3)'
+                }}>
+                  <h4 style={{ color: '#00ff88', margin: '0 0 12px 0', fontSize: '16px', fontWeight: 'bold' }}>
+                    🚀 Key Opportunities
+                  </h4>
+                  <ul style={{ color: 'rgba(255, 255, 255, 0.8)', margin: '0', paddingLeft: '20px', fontSize: '14px', lineHeight: '1.6' }}>
+                    {researchData.key_opportunities.map((opportunity, index) => (
+                      <li key={index} style={{ marginBottom: '6px' }}>{opportunity}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
               
               <div style={{

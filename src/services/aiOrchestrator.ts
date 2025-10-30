@@ -35,24 +35,20 @@ export interface AIAnalysisResult {
 }
 
 export class AIOrchestrator {
-  private apiKey: string;
   private apiUrl: string;
   private model: string;
 
   constructor() {
-    this.apiKey = process.env.REACT_APP_OPENAI_API_KEY || '';
-    this.apiUrl = process.env.REACT_APP_OPENAI_API_URL || 'https://api.openai.com/v1';
+    this.apiUrl = '/api/openai';
     this.model = process.env.REACT_APP_OPENAI_MODEL || 'gpt-4-mini';
   }
 
   isConfigured(): boolean {
-    return !!this.apiKey && this.apiKey !== '';
+    return true; // handled by backend proxy
   }
 
   async performQuickAnalysis(request: AIAnalysisRequest): Promise<AIAnalysisResult> {
-    if (!this.isConfigured()) {
-      throw new Error('OpenAI API key not configured');
-    }
+    // Key handled by backend
 
     try {
       const prompt = this.buildAnalysisPrompt(request);
@@ -73,12 +69,6 @@ export class AIOrchestrator {
           ],
           temperature: 0.3,
           max_tokens: 2000
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json'
-          }
         }
       );
 

@@ -1,11 +1,11 @@
-// GM Token Swap Logic - runs after window load to avoid blocking React mount
+Đ// GM Token Swap Logic - runs after window load to avoid blocking React mount
 window.addEventListener('load', () => {
   /** GM/FHE inline script moved here intact **/
   // BEGIN MOVED SCRIPT
   // Contract addresses (LATEST deployment - 2025-10-26) - From deployment-hybrid.json
   const TOKEN_ADDRESS = '0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08';
   const SWAP_ADDRESS = '0x438A2ce1B563E71b68F2f0EE0575736CccF3231e';
-  const RESEARCH_AI_ADDRESS = '0x0f45E8Fd3BB3ef64D93741bC1F9cf9cB53675aB8';
+  const RESEARCH_AI_ADDRESS = '0x141CFce36297458F12D3302ff69e6A17396c6BAc';
 
   let provider, signer, userAddress, fhevm;
   let eip712Signed = false;

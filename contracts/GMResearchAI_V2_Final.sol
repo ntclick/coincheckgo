@@ -58,7 +58,7 @@ contract GMResearchAI_V2_Final is Ownable {
     
     function hasCheckedInToday(address user) external view returns (bool) {
         uint256 currentDay = block.timestamp / 86400;
-        return lastCheckInDay[user] >= currentDay;
+        return lastCheckInDay[user] == currentDay;
     }
     
     function getResearchCount(address user) external view returns (uint256) {

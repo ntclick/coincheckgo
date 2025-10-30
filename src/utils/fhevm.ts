@@ -20,16 +20,17 @@ let fhevmSDK: any = null;
 let sdkLoaded = false;
 let autoInitialized = false;
 
-// FHEVM Configuration theo Zama SepoliaConfig
+// FHEVM Configuration theo Zama SepoliaConfig - Sử dụng env variables
 const FHEVM_CONFIG = {
-  aclContractAddress: '0x687820221192C5B662b25367F70076A37bc79b6c',
-  kmsContractAddress: '0x1364cBBf2cDF5032C47d8226a6f6FBD2AFCDacAC',
-  inputVerifierContractAddress: '0xbc91f3daD1A5F19F8390c400196e58073B6a0BC4',
-  verifyingContractAddressDecryption: '0xb6E160B1ff80D67Bfe90A85eE06Ce0A2613607D1',
+  aclContractAddress: process.env.REACT_APP_ACL_CONTRACT || '0x687820221192C5B662b25367F70076A37bc79b6c',
+  kmsContractAddress: process.env.REACT_APP_KMS_VERIFIER_CONTRACT || '0x1364cBBf2cDF5032C47d8226a6f6FBD2AFCDacAC',
+  inputVerifierContractAddress: process.env.REACT_APP_INPUT_VERIFIER_CONTRACT || '0xbc91f3daD1A5F19F8390c400196e58073B6a0BC4',
+  verifyingContractAddressDecryption: process.env.REACT_APP_DECRYPTION_ADDRESS || '0xb6E160B1ff80D67Bbe90A85eE06Ce0A2613607D1',
   verifyingContractAddressInputVerification: '0x7048C39f048125eDa9d678AEbaDfB22F7900a29F',
-  chainId: 11155111, // Sepolia FHEVM
-  gatewayChainId: 55815,
-  relayerUrl: 'https://relayer.testnet.zama.cloud',
+  chainId: Number(process.env.REACT_APP_CHAIN_ID) || 11155111,
+  gatewayChainId: Number(process.env.REACT_APP_GATEWAY_CHAIN_ID) || 55815,
+  relayerUrl: process.env.REACT_APP_RELAYER_URL || 'https://relayer.testnet.zama.cloud',
+  rpcUrl: process.env.REACT_APP_SEPOLIA_RPC_URL || 'https://ethereum-sepolia.publicnode.com',
 };
 
 // FHEVM Instance và SDK
@@ -109,12 +110,15 @@ export const autoInitializeFHEVM = async (): Promise<boolean> => {
     await initSDK();
     console.log('✅ FHEVM WASM auto-loaded');
 
-    // Create instance without network (for basic FHE operations)
+    // Create instance theo hướng dẫn Zama Protocol GPT
     const config = {
       ...SepoliaConfig,
+      relayerUrl: FHEVM_CONFIG.relayerUrl,
+      chainId: FHEVM_CONFIG.chainId,
+      rpcUrl: FHEVM_CONFIG.rpcUrl,
       // No network provider for auto-init
     };
-    
+
     fhevmInstance = await createInstance(config);
     console.log('✅ FHEVM instance auto-created:', fhevmInstance);
     
@@ -188,38 +192,21 @@ export const initializeFHEVM = async (provider: BrowserProvider, signer?: any): 
     await initSDK();
     console.log('✅ FHEVM SDK WASM loaded');
 
-    // Step 2: Create instance với SepoliaConfig
+    // Step 2: Create instance theo hướng dẫn Zama Protocol GPT
     const config = {
       ...SepoliaConfig,
-      network: window.ethereum, // Use window.ethereum directly as per documentation
+      relayerUrl: FHEVM_CONFIG.relayerUrl,
+      chainId: FHEVM_CONFIG.chainId,
+      rpcUrl: FHEVM_CONFIG.rpcUrl,
+      network: window.ethereum, // Use window.ethereum for wallet connection
       ...(signer && { signer }), // Add signer if provided for user decryption
     };
-    
-    // Ensure ACL contract is included (from Zama docs)
-    if (!config.aclContractAddress) {
-      console.warn('⚠️ No ACL contract address in SepoliaConfig, adding manually');
-      config.aclContractAddress = '0x687820221192C5B662b25367F70076A37bc79b6c';
-    }
-    
-    // Ensure all required contract addresses are present (from Zama docs)
-    if (!config.kmsContractAddress) {
-      config.kmsContractAddress = '0x1364cBBf2cDF5032C47d8226a6f6FBD2AFCDacAC';
-    }
-    if (!config.inputVerifierContractAddress) {
-      config.inputVerifierContractAddress = '0xbc91f3daD1A5F19F8390c400196e58073B6a0BC4';
-    }
-    if (!config.verifyingContractAddressDecryption) {
-      config.verifyingContractAddressDecryption = '0xb6E160B1ff80D67Bfe90A85eE06Ce0A2613607D1';
-    }
-    if (!config.verifyingContractAddressInputVerification) {
-      config.verifyingContractAddressInputVerification = '0x7048C39f048125eDa9d678AEbaDfB22F7900a29F';
-    }
-    
-    console.log('🔐 Using SepoliaConfig:', config);
-    console.log('🔐 ACL Contract Address:', config.aclContractAddress);
 
-    console.log('🔐 Creating FHEVM instance with config:', config);
-    console.log('🔐 Signer provided for user decryption:', !!signer);
+    console.log('🔐 Creating FHEVM instance with Zama config:', config);
+    console.log('🔐 Relayer URL:', config.relayerUrl);
+    console.log('🔐 Chain ID:', config.chainId);
+    console.log('🔐 RPC URL:', config.rpcUrl);
+
     fhevmInstance = await createInstance(config);
     console.log('✅ FHEVM instance created:', fhevmInstance);
     

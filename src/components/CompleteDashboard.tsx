@@ -481,64 +481,72 @@ export const CompleteDashboard: React.FC = () => {
     }
   };
 
+  // Load public data once on mount
   useEffect(() => {
-    // Load public data
     loadPublicData();
-    // Load news data
     fetchNewsData();
-    // Load real gainers/losers
     loadTopMovers();
-    
-    if (isConnected) {
-      loadAllData();
+  }, []);
+
+  // Load balance data only once when wallet connects (not on reconnects)
+  useEffect(() => {
+    if (isConnected && !(window as any).walletFirstConnected) {
+      console.log('💰 Loading balance data for first time after wallet connection...');
+      (window as any).walletFirstConnected = true;
+
       loadHomeData();
-      checkDailyCheckInStatus(); // Check on-chain daily check-in status
-      
-      // Auto-trigger EIP-712 signature after wallet connection (only if not already triggered)
-      if (!(window as any).decryptionTriggered) {
+      checkDailyCheckInStatus();
+
+      // Auto-trigger EIP-712 signature only once after wallet connection
+      if (!(window as any).decryptionTriggeredOnce) {
+        (window as any).decryptionTriggeredOnce = true;
         setTimeout(() => {
-          console.log('🔐 Auto-triggering EIP-712 signature after wallet connection...');
-          // Set flag to allow auto-decryption
+          console.log('🔐 Triggering EIP-712 signature once after wallet connection...');
           (window as any).walletJustConnected = true;
           (window as any).userRequestedDecryption = true;
-          
+
           if (window.forceDecryptConfidentialBalance) {
-            console.log('🔐 Calling forceDecryptConfidentialBalance...');
+            console.log('🔐 Calling forceDecryptConfidentialBalance (one time only)...');
             window.forceDecryptConfidentialBalance();
           } else {
-            console.log('⚠️ forceDecryptConfidentialBalance not available yet, retrying...');
-            // Retry after a short delay
-            setTimeout(() => {
-              if (window.forceDecryptConfidentialBalance) {
-                window.forceDecryptConfidentialBalance();
-              }
-            }, 2000);
+            console.log('⚠️ forceDecryptConfidentialBalance not available yet...');
           }
-        }, 1000); // Wait 1 second for everything to initialize
-      } else {
-        console.log('🔐 Decryption already triggered, skipping duplicate...');
+        }, 2000);
       }
     }
+  }, [isConnected]);
 
-    // Listen for token balance updates from the script
+  // Listen for token balance updates (only update UI, don't reload balance)
+  useEffect(() => {
     const handleTokenBalancesUpdate = (event: any) => {
       const { publicBalance } = event.detail;
       if (publicBalance) {
-        // Force update the UI with script data
-        console.log('🔄 Using script balance data:', publicBalance);
+        console.log('🔄 Updating UI with balance data:', publicBalance);
         setScriptGMBalance(publicBalance);
       }
-      
-      // Still call loadAllData for other data
+      // Don't call loadAllData() here to avoid continuous reloading
+    };
+
+    const handleTransactionSuccess = () => {
+      console.log('💰 Reloading balance after successful transaction...');
+      // Reload balance data from blockchain
       if (isConnected) {
-        loadAllData();
+        loadHomeData();
+        // Re-trigger balance load from injected script
+        setTimeout(() => {
+          if ((window as any).loadTokenBalances) {
+            (window as any).loadTokenBalances();
+          }
+        }, 2000);
       }
     };
 
     window.addEventListener('tokenBalancesUpdated', handleTokenBalancesUpdate);
-    
+    window.addEventListener('transactionSuccess', handleTransactionSuccess);
+
     return () => {
       window.removeEventListener('tokenBalancesUpdated', handleTokenBalancesUpdate);
+      window.removeEventListener('transactionSuccess', handleTransactionSuccess);
     };
   }, [isConnected]);
 
@@ -692,7 +700,9 @@ export const CompleteDashboard: React.FC = () => {
                         }}>Ξ</div>
                         <div>
                           <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '4px' }}>Ethereum</div>
-                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'rgb(0, 212, 255)' }}>{ethBalance} ETH</div>
+                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'rgb(0, 212, 255)' }}>
+                            {isConnected ? `${ethBalance} ETH` : 'Connect to view'}
+                          </div>
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
@@ -723,8 +733,17 @@ export const CompleteDashboard: React.FC = () => {
                         }}>G</div>
                         <div>
                           <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '4px' }}>GM Tokens</div>
-                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'rgb(255, 184, 0)' }}>{userPublicBalance} GM</div>
-                          <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '4px' }}>📊 Public: {userPublicBalance} GM</div>
+                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'rgb(255, 184, 0)' }}>
+                            {isConnected ? `${userPublicBalance} GM` : 'Connect to view'}
+                          </div>
+                          {isConnected && (
+                            <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '4px' }}>
+                              📊 Public: {userPublicBalance} GM
+                              {(window as any).userConfidentialBalance && parseFloat((window as any).userConfidentialBalance) > 0 && (
+                                <span> | 🔐 Confidential: {(window as any).userConfidentialBalance} GM</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
@@ -1252,8 +1271,9 @@ export const CompleteDashboard: React.FC = () => {
                   } else if (checkInStatus === 'ready') {
                     // Set loading state
                     setCheckInStatus('loading');
-                    
+
                     // Trigger daily check-in
+                    console.log('🔍 Checking window.dailyCheckIn availability:', typeof window.dailyCheckIn);
                     if (window.dailyCheckIn) {
                       try {
                         await window.dailyCheckIn();
@@ -1267,7 +1287,9 @@ export const CompleteDashboard: React.FC = () => {
                         setCheckInStatus('ready');
                       }
                     } else {
-                      console.log('🔔 Daily check-in function not available');
+                      console.log('❌ Daily check-in function is not available in window object');
+                      console.log('🔍 Available window functions:', Object.keys(window).filter(key => key.includes('Check') || key.includes('check') || key.includes('daily')));
+                      alert('Daily check-in system is not ready. Please refresh the page and try again.');
                       setCheckInStatus('ready');
                     }
                   }
@@ -1323,7 +1345,7 @@ export const CompleteDashboard: React.FC = () => {
                 <div className="glass-card">
                   <h3 style={{ color: '#00ff88', marginBottom: '10px', fontSize: '16px' }}>📈 Top Gainers</h3>
                   <div style={{ maxHeight: 'none', overflowY: 'visible' }}>
-                    {topGainers.map((coin, index) => (
+                    {topGainers.slice(0, 5).map((coin, index) => (
                       <div key={index} style={{ 
                         display: 'flex', 
                         justifyContent: 'space-between', 
@@ -1352,7 +1374,7 @@ export const CompleteDashboard: React.FC = () => {
                 <div className="glass-card">
                   <h3 style={{ color: '#ff4757', marginBottom: '10px', fontSize: '16px' }}>📉 Top Losers</h3>
                   <div style={{ maxHeight: 'none', overflowY: 'visible' }}>
-                    {topLosers.map((coin, index) => (
+                    {topLosers.slice(0, 5).map((coin, index) => (
                       <div key={index} style={{ 
                         display: 'flex', 
                         justifyContent: 'space-between', 
@@ -1428,7 +1450,9 @@ export const CompleteDashboard: React.FC = () => {
                         }}>Ξ</div>
                         <div>
                           <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '4px' }}>Ethereum</div>
-                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'rgb(0, 212, 255)' }}>{ethBalance} ETH</div>
+                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'rgb(0, 212, 255)' }}>
+                            {isConnected ? `${ethBalance} ETH` : 'Connect to view'}
+                          </div>
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
@@ -1459,8 +1483,17 @@ export const CompleteDashboard: React.FC = () => {
                         }}>G</div>
                         <div>
                           <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '4px' }}>GM Tokens</div>
-                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'rgb(255, 184, 0)' }}>{userPublicBalance} GM</div>
-                          <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '4px' }}>📊 Public: {userPublicBalance} GM</div>
+                          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'rgb(255, 184, 0)' }}>
+                            {isConnected ? `${userPublicBalance} GM` : 'Connect to view'}
+                          </div>
+                          {isConnected && (
+                            <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.7)', marginTop: '4px' }}>
+                              📊 Public: {userPublicBalance} GM
+                              {(window as any).userConfidentialBalance && parseFloat((window as any).userConfidentialBalance) > 0 && (
+                                <span> | 🔐 Confidential: {(window as any).userConfidentialBalance} GM</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
@@ -1936,7 +1969,7 @@ export const CompleteDashboard: React.FC = () => {
             <div className="glass-card" style={{ padding: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 {(() => {
-                  const pageSize = 50;
+                  const pageSize = 20;
                   const total = marketList.length;
                   const start = total === 0 ? 0 : marketPage * pageSize + 1;
                   const end = Math.min(total, (marketPage + 1) * pageSize);
@@ -1975,7 +2008,7 @@ export const CompleteDashboard: React.FC = () => {
                   </thead>
                   <tbody>
                     {(() => {
-                      const pageSize = 50;
+                      const pageSize = 20;
                       const startIndex = marketPage * pageSize;
                       const endIndex = Math.min(marketList.length, startIndex + pageSize);
                       const pageItems = marketList.slice(startIndex, endIndex);

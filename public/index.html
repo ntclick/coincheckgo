@@ -317,6 +317,11 @@
                 await swapTx.wait();
                 console.log('✅ ETH → GM swap successful');
 
+                // Dispatch transaction success event
+                window.dispatchEvent(new CustomEvent('transactionSuccess', {
+                    detail: { type: 'swapETHToGM', amount: ethAmount }
+                }));
+
                 // Check new balance
                 const balance = await tokenContract.balanceOf(userAddress);
                 console.log(`💰 New GM Balance: ${ethers.utils.formatEther(balance)} GM`);
@@ -412,6 +417,11 @@
                 const swapTx = await swapContract.swapGMForETH(handleHex, encrypted.inputProof);
                 await swapTx.wait();
                 console.log('✅ GM → ETH confidential swap successful');
+
+                // Dispatch transaction success event
+                window.dispatchEvent(new CustomEvent('transactionSuccess', {
+                    detail: { type: 'swapGMToETH', amount: gmAmount }
+                }));
 
                 // Refresh balances
                 await loadTokenBalances();
@@ -562,13 +572,48 @@
                                             }
                                         }
                                         
-                                        if (decryptedBalance) {
-                                            console.log(`💰 Decrypted GM Balance: ${decryptedBalance} GM`);
-                                            updateTokenBalancesUI(null, null, null, decryptedBalance);
-                                        } else {
-                                            console.log('⚠️ No decrypted balance found in result');
-                                            updateTokenBalancesUI(null, null, null, '0.00');
-                                        }
+                                // Get current public balances before updating UI
+                                console.log('💰 Getting current public balances for UI update...');
+                                let currentEthBalance = '0.00';
+                                let currentPublicBalance = '0.00';
+                                try {
+                                    const ethBalanceRaw = await window.ethereum.request({
+                                        method: 'eth_getBalance',
+                                        params: [userAddress, 'latest']
+                                    });
+                                    currentEthBalance = ethers.utils.formatEther(ethBalanceRaw);
+
+                                    const publicBalanceRaw = await tokenContract.balanceOf(userAddress);
+                                    currentPublicBalance = ethers.utils.formatEther(publicBalanceRaw);
+                                    console.log(`📊 Current balances - ETH: ${currentEthBalance}, GM: ${currentPublicBalance}`);
+                                } catch (balanceError) {
+                                    console.log('⚠️ Could not get current balances:', balanceError.message);
+                                    // Use fallback values
+                                    currentEthBalance = window.globalHookState?.ethBalance || '0.00';
+                                    currentPublicBalance = window.globalHookState?.userPublicBalance || '0.00';
+                                }
+
+                                if (decryptedBalance) {
+                                    console.log(`💰 Decrypted GM Balance: ${decryptedBalance} GM`);
+                                    // Update both public and confidential balances
+                                    window.userConfidentialBalance = decryptedBalance;
+                                    updateTokenBalancesUI({
+                                        ethBalance: currentEthBalance,
+                                        gmBalance: currentPublicBalance,
+                                        publicBalance: currentPublicBalance,
+                                        confidentialBalance: decryptedBalance
+                                    });
+                                } else {
+                                    console.log('⚠️ No decrypted balance found in result');
+                                    // Update with current public balances, confidential = 0.00
+                                    window.userConfidentialBalance = '0.00';
+                                    updateTokenBalancesUI({
+                                        ethBalance: currentEthBalance,
+                                        gmBalance: currentPublicBalance,
+                                        publicBalance: currentPublicBalance,
+                                        confidentialBalance: '0.00'
+                                    });
+                                }
                                         
                                         // Reset flags after successful decryption
                                         window.walletJustConnected = false;
@@ -580,13 +625,57 @@
                                             console.log('🔧 Relayer error detected - this is expected in development');
                                             console.log('💡 Confidential balance exists but cannot be decrypted due to relayer issues');
                                         }
-                                        // Update UI with public balance
-                                        updateTokenBalancesUI(null, null, null, '0.00');
+                                        // Keep confidential balance as 0.00, get current public balances
+                                        window.userConfidentialBalance = '0.00';
+                                        let currentEthBalance = '0.00';
+                                        let currentPublicBalance = '0.00';
+                                        try {
+                                            const ethBalanceRaw = await window.ethereum.request({
+                                                method: 'eth_getBalance',
+                                                params: [userAddress, 'latest']
+                                            });
+                                            currentEthBalance = ethers.utils.formatEther(ethBalanceRaw);
+
+                                            const publicBalanceRaw = await tokenContract.balanceOf(userAddress);
+                                            currentPublicBalance = ethers.utils.formatEther(publicBalanceRaw);
+                                        } catch (balanceError) {
+                                            console.log('⚠️ Could not get current balances:', balanceError.message);
+                                            currentEthBalance = window.globalHookState?.ethBalance || '0.00';
+                                            currentPublicBalance = window.globalHookState?.userPublicBalance || '0.00';
+                                        }
+                                        updateTokenBalancesUI({
+                                            ethBalance: currentEthBalance,
+                                            gmBalance: currentPublicBalance,
+                                            publicBalance: currentPublicBalance,
+                                            confidentialBalance: '0.00'
+                                        });
                                     }
                                 } catch (decryptError) {
                                     console.log('⚠️ Decryption failed, using public balance:', decryptError.message);
-                                    // Update UI with public balance
-                                    updateTokenBalancesUI(null, null, null, '0.00');
+                                    // Keep confidential balance as 0.00, get current public balances
+                                    window.userConfidentialBalance = '0.00';
+                                    let currentEthBalance = '0.00';
+                                    let currentPublicBalance = '0.00';
+                                    try {
+                                        const ethBalanceRaw = await window.ethereum.request({
+                                            method: 'eth_getBalance',
+                                            params: [userAddress, 'latest']
+                                        });
+                                        currentEthBalance = ethers.utils.formatEther(ethBalanceRaw);
+
+                                        const publicBalanceRaw = await tokenContract.balanceOf(userAddress);
+                                        currentPublicBalance = ethers.utils.formatEther(publicBalanceRaw);
+                                    } catch (balanceError) {
+                                        console.log('⚠️ Could not get current balances:', balanceError.message);
+                                        currentEthBalance = window.globalHookState?.ethBalance || '0.00';
+                                        currentPublicBalance = window.globalHookState?.userPublicBalance || '0.00';
+                                    }
+                                    updateTokenBalancesUI({
+                                        ethBalance: currentEthBalance,
+                                        gmBalance: currentPublicBalance,
+                                        publicBalance: currentPublicBalance,
+                                        confidentialBalance: '0.00'
+                                    });
                                 }
                             } else {
                                 console.log('⚠️ FHEVM not available for decryption');
@@ -602,12 +691,13 @@
                     console.log('⚠️ Could not get GM token balance:', balanceError.message);
                 }
 
-                // Update UI with real data
+                // Update UI with real data (preserve existing confidential balance if already decrypted)
+                const existingConfidential = window.userConfidentialBalance || '0.00';
                 updateTokenBalancesUI({
                     ethBalance: ethBalanceFormatted,
                     gmBalance: gmBalanceFormatted,
                     publicBalance: publicBalanceFormatted,
-                    confidentialBalance: confidentialBalanceFormatted
+                    confidentialBalance: parseFloat(existingConfidential) > 0 ? existingConfidential : confidentialBalanceFormatted
                 });
 
                 return {
@@ -840,43 +930,110 @@
                 // Try different ways to access the decrypted balance
                 let decryptedBalance = null;
                 if (result && result[0] && result[0].balance) {
-                    decryptedBalance = ethers.utils.formatEther(result[0].balance);
+                    const value = typeof result[0].balance === 'bigint' ? result[0].balance :
+                                 typeof result[0].balance === 'string' ? BigInt(result[0].balance) :
+                                 result[0].balance;
+                    decryptedBalance = ethers.utils.formatEther(value);
                 } else if (result && result[0] && typeof result[0] === 'object') {
                     // Try to find balance in the object
                     const balanceKey = Object.keys(result[0]).find(key => key.includes('balance') || key.includes('amount'));
                     if (balanceKey && result[0][balanceKey]) {
-                        decryptedBalance = ethers.utils.formatEther(result[0][balanceKey]);
+                        const value = typeof result[0][balanceKey] === 'bigint' ? result[0][balanceKey] :
+                                     typeof result[0][balanceKey] === 'string' ? BigInt(result[0][balanceKey]) :
+                                     result[0][balanceKey];
+                        decryptedBalance = ethers.utils.formatEther(value);
                     }
                 } else if (result && typeof result === 'object') {
                     // Try to find balance in the result object directly
                     const balanceKey = Object.keys(result).find(key => key.includes('balance') || key.includes('amount'));
                     if (balanceKey && result[balanceKey]) {
-                        decryptedBalance = ethers.utils.formatEther(result[balanceKey]);
+                        const value = typeof result[balanceKey] === 'bigint' ? result[balanceKey] :
+                                     typeof result[balanceKey] === 'string' ? BigInt(result[balanceKey]) :
+                                     result[balanceKey];
+                        decryptedBalance = ethers.utils.formatEther(value);
                     } else {
-                        // Try to find any BigInt value in the result object
-                        const bigIntKey = Object.keys(result).find(key => typeof result[key] === 'bigint');
-                        if (bigIntKey && result[bigIntKey]) {
-                            decryptedBalance = ethers.utils.formatEther(result[bigIntKey]);
+                        // Check if result is a single key-value pair where key is encrypted hex and value is decrypted amount
+                        const keys = Object.keys(result);
+                        if (keys.length === 1 && keys[0].startsWith('0x')) {
+                            // This is { "encrypted_hex": decrypted_amount }
+                            const value = result[keys[0]];
+                            try {
+                                let weiValue;
+                                if (typeof value === 'bigint') {
+                                    weiValue = value;
+                                } else if (typeof value === 'string') {
+                                    weiValue = BigInt(value);
+                                } else {
+                                    weiValue = BigInt(String(value));
+                                }
+                                decryptedBalance = ethers.utils.formatEther(weiValue);
+                                console.log(`✅ Parsed decrypted balance: ${value} -> ${decryptedBalance} GM`);
+                            } catch (e) {
+                                console.log('❌ Failed to parse decrypted balance:', value, e);
+                            }
                         } else {
-                            // Try to find any numeric value (including string "0")
-                            const numericKey = Object.keys(result).find(key => 
-                                typeof result[key] === 'bigint' || 
-                                (typeof result[key] === 'string' && !isNaN(parseFloat(result[key])))
-                            );
-                            if (numericKey && result[numericKey]) {
-                                const value = typeof result[numericKey] === 'bigint' ? result[numericKey] : BigInt(result[numericKey]);
-                                decryptedBalance = ethers.utils.formatEther(value);
+                            // Try to find any BigInt value in the result object
+                            const bigIntKey = Object.keys(result).find(key => typeof result[key] === 'bigint');
+                            if (bigIntKey && result[bigIntKey]) {
+                                decryptedBalance = ethers.utils.formatEther(result[bigIntKey]);
+                            } else {
+                                // Try to find any numeric value (including string "0")
+                                const numericKey = Object.keys(result).find(key =>
+                                    typeof result[key] === 'bigint' ||
+                                    (typeof result[key] === 'string' && !isNaN(parseFloat(result[key])))
+                                );
+                                if (numericKey && result[numericKey]) {
+                                    const value = typeof result[numericKey] === 'bigint' ? result[numericKey] :
+                                                 typeof result[numericKey] === 'string' ? BigInt(result[numericKey]) :
+                                                 result[numericKey];
+                                    decryptedBalance = ethers.utils.formatEther(value);
+                                }
                             }
                         }
                     }
                 }
                 
+                // Get current public balances before updating UI
+                console.log('💰 Getting current public balances for UI update...');
+                let currentEthBalance = '0.00';
+                let currentPublicBalance = '0.00';
+                try {
+                    const ethBalanceRaw = await window.ethereum.request({
+                        method: 'eth_getBalance',
+                        params: [userAddress, 'latest']
+                    });
+                    currentEthBalance = ethers.utils.formatEther(ethBalanceRaw);
+
+                    const publicBalanceRaw = await tokenContract.balanceOf(userAddress);
+                    currentPublicBalance = ethers.utils.formatEther(publicBalanceRaw);
+                    console.log(`📊 Current balances - ETH: ${currentEthBalance}, GM: ${currentPublicBalance}`);
+                } catch (balanceError) {
+                    console.log('⚠️ Could not get current balances:', balanceError.message);
+                    // Use fallback values
+                    currentEthBalance = window.globalHookState?.ethBalance || '0.00';
+                    currentPublicBalance = window.globalHookState?.userPublicBalance || '0.00';
+                }
+
                 if (decryptedBalance) {
                     console.log(`💰 Decrypted GM Balance: ${decryptedBalance} GM`);
-                    updateTokenBalancesUI(null, null, null, decryptedBalance);
+                    // Update both public and confidential balances
+                    window.userConfidentialBalance = decryptedBalance;
+                    updateTokenBalancesUI({
+                        ethBalance: currentEthBalance,
+                        gmBalance: currentPublicBalance,
+                        publicBalance: currentPublicBalance,
+                        confidentialBalance: decryptedBalance
+                    });
                 } else {
                     console.log('⚠️ No decrypted balance found in result');
-                    updateTokenBalancesUI(null, null, null, '0.00');
+                    // Update with current public balances, confidential = 0.00
+                    window.userConfidentialBalance = '0.00';
+                    updateTokenBalancesUI({
+                        ethBalance: currentEthBalance,
+                        gmBalance: currentPublicBalance,
+                        publicBalance: currentPublicBalance,
+                        confidentialBalance: '0.00'
+                    });
                 }
                 return true;
             } catch (error) {
@@ -1046,7 +1203,7 @@
         window.manualInitialize = window.manualInitialize;
         window.retryFHEVMInitialization = window.retryFHEVMInitialization;
         window.forceEIP712Signature = window.forceEIP712Signature;
-        window.dailyCheckIn = window.dailyCheckIn;
+        // window.dailyCheckIn is defined later in the daily check-in function
         window.performAIResearch = window.performAIResearch;
         window.fundResearchContract = window.fundResearchContract;
         window.addLiquidity = window.addLiquidity;
@@ -1235,8 +1392,10 @@
             } catch (_) {}
         };
 
-        // Start waiting for wallet connection instead of auto-initializing
-        waitForWalletConnection();
+        // Start waiting for wallet connection instead of auto-initializing - only once
+        if (!window.swapFunctionsInitialized) {
+            waitForWalletConnection();
+        }
 
         // Public GM to ETH swap function
         window.swapGMForETHPublic = async function swapGMForETHPublic(gmAmountParam = null) {
@@ -1326,7 +1485,12 @@
                 
                 const receipt = await swapTx.wait();
                 console.log(`✅ GM→ETH swap successful! Gas used: ${receipt.gasUsed.toString()}`);
-                
+
+                // Dispatch transaction success event
+                window.dispatchEvent(new CustomEvent('transactionSuccess', {
+                    detail: { type: 'swapGMToETH', amount: gmAmount }
+                }));
+
                 // Refresh balances
                 await loadTokenBalances();
                 
@@ -1348,18 +1512,43 @@
                     console.log('⚠️ Wallet not connected or contract not initialized');
                     return 'not-checked';
                 }
-                
-                // Check if user has checked in today (this would need to be implemented in the contract)
-                // For now, we'll use localStorage as the primary source
-                const lastCheckIn = getLastCheckIn();
-                const windowStart = currentResetStartUtc7();
-                const hasCheckedInToday = lastCheckIn >= windowStart;
-                
-                console.log(`📅 Check-in status: ${hasCheckedInToday ? 'Already checked in today' : 'Available'}`);
-                return hasCheckedInToday ? 'completed' : 'ready';
+
+                // Check on-chain if user has checked in today
+                console.log('🔍 Checking on-chain daily check-in status...');
+                try {
+                    const hasCheckedIn = await researchAIContract.hasCheckedInToday(userAddress);
+                    console.log(`📅 On-chain check-in status: ${hasCheckedIn ? 'Already checked in today' : 'Available'}`);
+
+                    // Also check pool balance
+                    const poolBalance = await researchAIContract.getPoolBalance();
+                    const rewardAmount = ethers.utils.parseEther("100"); // 100 GM tokens
+                    console.log(`🏊 Pool balance: ${ethers.utils.formatEther(poolBalance)} GM, Required: ${ethers.utils.formatEther(rewardAmount)} GM`);
+
+                    if (hasCheckedIn) {
+                        return 'completed';
+                    } else if (poolBalance < rewardAmount) {
+                        console.log('⚠️ Insufficient pool balance for daily check-in');
+                        return 'not-checked'; // Pool doesn't have enough tokens
+                    } else {
+                        return 'ready';
+                    }
+                } catch (contractError) {
+                    console.log('⚠️ Contract call failed, falling back to localStorage:', contractError.message);
+                    // Fallback to localStorage if contract calls fail
+                }
             } catch (error) {
                 console.error('❌ Error checking daily check-in status:', error);
-                return 'not-checked';
+                // Fallback to localStorage if on-chain check fails
+                try {
+                    const lastCheckIn = getLastCheckIn();
+                    const windowStart = currentResetStartUtc7();
+                    const hasCheckedInToday = lastCheckIn >= windowStart;
+                    console.log(`📅 Fallback to localStorage: ${hasCheckedInToday ? 'Already checked in today' : 'Available'}`);
+                    return hasCheckedInToday ? 'completed' : 'ready';
+                } catch (fallbackError) {
+                    console.error('❌ Fallback check also failed:', fallbackError);
+                    return 'not-checked';
+                }
             }
         };
         function nowUtcSeconds() {
@@ -1433,45 +1622,59 @@
         updateCheckInUIAvailability();
         setInterval(updateCheckInUIAvailability, 30000);
 
-        // Daily Check-in function (simplified - direct minting)
+        // Daily Check-in function (NORMAL TRANSACTION - No FHE)
+        console.log('🔧 Defining window.dailyCheckIn function...');
         window.dailyCheckIn = async function dailyCheckIn() {
+            console.log('🎯 window.dailyCheckIn function called!');
             try {
-                if (!tokenContract) {
-                    throw new Error('Token contract not initialized');
+                // Get research contract from window object (set by React app)
+                const researchContract = window.researchContract;
+                if (!researchContract) {
+                    throw new Error('Research contract not initialized');
                 }
-                
-                console.log('📅 Performing daily check-in...');
-                
-                // Simple daily check-in by minting 100 GM directly
-                const checkInAmount = ethers.utils.parseEther("100"); // 100 GM
-                
-                const checkInTx = await tokenContract.mint(userAddress, checkInAmount);
-                console.log(`📤 Daily check-in transaction sent: ${checkInTx.hash}`);
-                
+
+                console.log('🔄 Performing normal daily check-in...');
+
+                // Pre-check on-chain status and pool balance
+                console.log('🔍 Pre-checking daily check-in status...');
+                const alreadyChecked = await researchContract.hasCheckedInToday(userAddress);
+                if (alreadyChecked) {
+                    console.log('✅ Already checked in today');
+                    throw new Error('Already checked in today');
+                }
+
+                const poolBalance = await researchContract.getPoolBalance();
+                const reward = ethers.utils.parseEther('100');
+                if (poolBalance < reward) {
+                    console.log('⚠️ Insufficient pool balance');
+                    throw new Error('Insufficient pool balance for daily check-in');
+                }
+
+                console.log('📤 Sending daily check-in transaction...');
+
+                // Send transaction with gas fallback
+                let gasLimit;
+                try {
+                  gasLimit = await researchContract.estimateGas.dailyCheckIn();
+                  console.log('📊 Estimated gas:', gasLimit.toString());
+                } catch (estimateError) {
+                  console.warn('⚠️ Gas estimation failed, using fallback:', estimateError.message);
+                  gasLimit = 300000n; // Safe fallback for Sepolia
+                }
+
+                const checkInTx = await researchContract.dailyCheckIn({ gasLimit });
+                console.log(`📤 Check-in transaction sent: ${checkInTx.hash}`);
+
                 const receipt = await checkInTx.wait();
                 console.log(`✅ Daily check-in successful! Gas used: ${receipt.gasUsed.toString()}`);
-                console.log('🎉 You received 100 GM tokens!');
-                
-                // Persist lock until next reset (07:00 UTC+7 of next day)
-                const nowTs = nowUtcSeconds();
-                const nextTs = nextResetUtc7();
-                setLastCheckIn(nowTs);
-                setNextReset(nextTs);
-                
-                // Hide button immediately after successful check-in
-                updateCheckInUIAvailability();
-                
-                // Dispatch event for React component synchronization
-                window.dispatchEvent(new CustomEvent('checkInAvailabilityChanged', {
-                    detail: { available: false, nextReset: nextTs }
-                }));
-                
-                // Dispatch success event
-                window.dispatchEvent(new CustomEvent('checkInSuccess'));
 
-                // Refresh balances
+                console.log('🎉 You received 100 GM tokens!');
+                window.dispatchEvent(new CustomEvent('transactionSuccess', {
+                    detail: { type: 'dailyCheckIn', amount: '100' }
+                }));
+
+                // Update UI
                 await loadTokenBalances();
-                
                 return true;
             } catch (error) {
                 console.error(`❌ Daily check-in failed: ${error.message}`);
@@ -1707,30 +1910,35 @@
             }
         };
 
-        console.log('🚀 GM Token Swap functions loaded');
-        console.log('Available functions:');
-        console.log('  - initializeSwap() - Initialize wallet and contracts');
-        console.log('  - loadGMTokens(amount) - Mint GM tokens to wallet');
-        console.log('  - loadTokenBalances() - Load and display all token balances');
-        console.log('  - swapETHForGM(ethAmount) - Swap ETH → GM (Public)');
-        console.log('  - swapGMForETH(gmAmount) - Swap GM → ETH (FHE)');
-        console.log('  - swapGMForETHPublic(gmAmount) - Swap GM → ETH (Public)');
-        console.log('  - checkPoolStatus() - Check pool and balance status');
-        console.log('  - checkReactFHEVM() - Check if React FHEVM is available');
-        console.log('  - waitForReactFHEVM() - Wait for React FHEVM to be ready');
-        console.log('  - setupWalletListeners() - Setup auto-refresh on wallet changes');
-        console.log('  - forceDecryptConfidentialBalance() - Force decrypt with EIP-712 signature');
-        console.log('  - manualInitialize() - Manual trigger initialization (for debugging)');
-        console.log('  - retryFHEVMInitialization() - Retry FHEVM initialization when available');
-        console.log('  - forceEIP712Signature() - Force EIP-712 signature for testing');
-        console.log('  - checkContractState() - Check contract state and load balances');
-        console.log('  - syncGMAmount() - Auto-sync GM amount based on ETH input');
-        console.log('  - syncETHAmount() - Auto-sync ETH amount based on GM input');
-        console.log('  - dailyCheckIn() - Daily check-in to receive 100 GM');
-        console.log('  - performAIResearch(topic) - Perform AI research (costs 10 GM)');
-        console.log('  - fundResearchContract(amount) - Fund research contract with GM tokens');
-        console.log('  - addLiquidity() - Add liquidity to the swap pool');
-        console.log('  - addLiquidityWithAmounts(ethAmount, gmAmount) - Add liquidity with custom amounts');
+        // Prevent multiple initializations
+        if (!window.swapFunctionsInitialized) {
+            window.swapFunctionsInitialized = true;
+
+            console.log('🚀 GM Token Swap functions loaded');
+            console.log('Available functions:');
+            console.log('  - initializeSwap() - Initialize wallet and contracts');
+            console.log('  - loadGMTokens(amount) - Mint GM tokens to wallet');
+            console.log('  - loadTokenBalances() - Load and display all token balances');
+            console.log('  - swapETHForGM(ethAmount) - Swap ETH → GM (Public)');
+            console.log('  - swapGMForETH(gmAmount) - Swap GM → ETH (FHE)');
+            console.log('  - swapGMForETHPublic(gmAmount) - Swap GM → ETH (Public)');
+            console.log('  - checkPoolStatus() - Check pool and balance status');
+            console.log('  - checkReactFHEVM() - Check if React FHEVM is available');
+            console.log('  - waitForReactFHEVM() - Wait for React FHEVM to be ready');
+            console.log('  - setupWalletListeners() - Setup auto-refresh on wallet changes');
+            console.log('  - forceDecryptConfidentialBalance() - Force decrypt with EIP-712 signature');
+            console.log('  - manualInitialize() - Manual trigger initialization (for debugging)');
+            console.log('  - retryFHEVMInitialization() - Retry FHEVM initialization when available');
+            console.log('  - forceEIP712Signature() - Force EIP-712 signature for testing');
+            console.log('  - checkContractState() - Check contract state and load balances');
+            console.log('  - syncGMAmount() - Auto-sync GM amount based on ETH input');
+            console.log('  - syncETHAmount() - Auto-sync ETH amount based on GM input');
+            console.log('  - dailyCheckIn() - Daily check-in to receive 100 GM');
+            console.log('  - performAIResearch(topic) - Perform AI research (costs 10 GM)');
+            console.log('  - fundResearchContract(amount) - Fund research contract with GM tokens');
+            console.log('  - addLiquidity() - Add liquidity to the swap pool');
+            console.log('  - addLiquidityWithAmounts(ethAmount, gmAmount) - Add liquidity with custom amounts');
+        }
 
         // Helper function to validate contract state
         async function validateContractState() {

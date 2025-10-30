@@ -111,6 +111,35 @@ const useCoinCheckGoFHESimple = () => {
     setIsLoading(globalHookState.isLoading);
     setUserPublicBalance(globalHookState.userPublicBalance);
   }, [forceUpdate]);
+
+  // Listen for token balance updates from public/index.html
+  useEffect(() => {
+    const handleTokenBalancesUpdate = (event: any) => {
+      const { public: publicBalance, confidential, gm } = event.detail;
+
+      console.log('🔄 Hook received token balance update:', {
+        public: publicBalance,
+        confidential: confidential,
+        gm: gm
+      });
+
+      // Update userPublicBalance state
+      if (publicBalance !== undefined) {
+        setUserPublicBalance(publicBalance);
+      }
+
+      // Store confidential balance for AIResearchTool to access
+      if (confidential !== undefined && parseFloat(confidential) > 0) {
+        (window as any).userConfidentialBalance = confidential;
+      }
+    };
+
+    window.addEventListener('tokenBalancesUpdated', handleTokenBalancesUpdate);
+
+    return () => {
+      window.removeEventListener('tokenBalancesUpdated', handleTokenBalancesUpdate);
+    };
+  }, []);
   
   // Contract instances
   const [gmTokenContract, setGmTokenContract] = useState<any>(null);
@@ -174,6 +203,11 @@ const useCoinCheckGoFHESimple = () => {
       setGmTokenContract(gmToken);
       setSwapContract(swap);
       setResearchContract(research);
+
+      // Also set contracts on window object for injected script access
+      (window as any).tokenContract = gmToken;
+      (window as any).swapContract = swap;
+      (window as any).researchContract = research;
         
         // Debug log removed
       
@@ -186,7 +220,7 @@ const useCoinCheckGoFHESimple = () => {
       
       // Load token balances
       // Debug log removed
-      await loadDataWithContracts(gmToken, swap, userAddress);
+      await loadDataWithContracts(gmToken, swap, research, userAddress);
       
       // Auto-trigger decryption after injected script is ready (only if not already triggered)
       if (!(window as any).decryptionTriggered) {
@@ -194,18 +228,8 @@ const useCoinCheckGoFHESimple = () => {
         console.log('🔐 Auto-triggering decryption...');
         setTimeout(async () => {
           try {
-            // Wait for injected script to be ready
-            let retries = 0;
-            while (retries < 10) {
-              if (window.forceDecryptConfidentialBalance) {
-                console.log('🔐 Injected script ready, triggering decryption...');
-                window.forceDecryptConfidentialBalance();
-                break;
-              }
-              console.log(`🔐 Waiting for injected script... (${retries + 1}/10)`);
-              await new Promise(resolve => setTimeout(resolve, 500));
-              retries++;
-            }
+            // Don't auto-trigger EIP-712 here, will trigger only after wallet connect
+            console.log('🔐 FHEVM ready, waiting for wallet connection to trigger decryption...');
             console.log('✅ Auto-decryption triggered');
           } catch (error) {
             console.log('⚠️ Auto-decryption failed:', error);
@@ -369,7 +393,7 @@ const useCoinCheckGoFHESimple = () => {
   };
 
   // Load data with contracts
-  const loadDataWithContracts = async (gmContract: any, swapContract: any, userAddress: string, forceReload: boolean = false) => {
+  const loadDataWithContracts = async (gmContract: any, swapContract: any, researchContract: any, userAddress: string, forceReload: boolean = false) => {
     try {
       // Verify contract is deployed (use contract's provider or BrowserProvider)
       try {
@@ -425,7 +449,6 @@ const useCoinCheckGoFHESimple = () => {
         setUserPublicBalance(publicBalanceFormatted);
         globalHookState.userPublicBalance = publicBalanceFormatted;
         notifyGlobalStateChange(); // Notify all listeners
-        console.log(`💰 Public Balance: ${publicBalanceFormatted} GM`);
       } catch (balanceError) {
         console.log('⚠️ Failed to load public balance, using default 0');
         setUserPublicBalance(0);
@@ -564,7 +587,7 @@ const useCoinCheckGoFHESimple = () => {
       // Reload balance after check-in
       setTimeout(() => {
         console.log('🔄 Reloading balance after check-in...');
-        loadDataWithContracts(gmTokenContract!, swapContract!, address, true);
+        loadDataWithContracts(gmTokenContract!, swapContract!, researchContract!, address, true);
       }, 2000);
       
     } catch (error: any) {
@@ -575,59 +598,170 @@ const useCoinCheckGoFHESimple = () => {
     }
   };
 
-  // Research function
-  const performResearch = async (researchType: number) => {
+  // Research state management
+  const [isResearching, setIsResearching] = useState(false);
+
+  // Research function with FHE EIP-712 signature
+  const performResearch = async (researchType: number = 1) => {
+    console.log('🔬 performResearch called with type:', researchType);
+
     if (!researchContract || !isConnected || !address) {
-      toast.error('Please connect your wallet first!');
-      return;
+      console.log('❌ Research prerequisites failed:', { researchContract: !!researchContract, isConnected, address });
+      // Try recover from window to avoid blocking
+      const winResearch = (window as any).researchContract;
+      if (winResearch) {
+        try { setResearchContract(winResearch); } catch (_) {}
+      }
+      if (!winResearch) return null; // silent exit
     }
 
-    setIsLoading(true);
-    try {
-      console.log(`🔬 Performing research type ${researchType}...`);
-      
-      // Get research cost
-      const cost = await researchContract.getResearchCost();
-      console.log(`💰 Research cost: ${ethers.formatEther(cost)} GM tokens`);
-      
-      // Check if user has enough balance
-      if (userPublicBalance < parseFloat(ethers.formatEther(cost))) {
-        toast.error(`Insufficient GM tokens! Need ${ethers.formatEther(cost)}, have ${userPublicBalance}`);
-      return;
+    if (isResearching) {
+      console.log('❌ Research already in progress');
+      toast.error('Research already in progress...');
+      return null;
     }
+
+    setIsResearching(true);
+    console.log('✅ Research started, isResearching set to true');
+
+    try {
+      console.log(`🔬 Starting FHE research type ${researchType}...`);
+
+      // Get research cost from contract (fallback to 10 GM if getter missing)
+      let cost: bigint;
+      try {
+        cost = await researchContract.getResearchCost();
+      } catch (_) {
+        console.log('ℹ️ getResearchCost() missing on contract, using default 10 GM');
+        cost = ethers.parseEther('10');
+      }
+      const costFormatted = parseFloat(ethers.formatEther(cost));
+      console.log(`💰 Research cost: ${costFormatted} GM tokens`);
+
+      // Check balance using PUBLIC GM only (ignore confidential for research)
+      const publicBalance = (window as any).userPublicBalance ?? userPublicBalance ?? 0;
+      const effectiveBalance = Number(publicBalance);
+
+      console.log(`💰 User balance check (PUBLIC only):`, {
+        public: publicBalance,
+        effective: effectiveBalance,
+        required: costFormatted,
+        hasEnough: effectiveBalance >= costFormatted
+      });
+
+      if (effectiveBalance < costFormatted) {
+        console.log(`❌ Insufficient PUBLIC balance: ${effectiveBalance} < ${costFormatted}`);
+        toast.error(`❌ Insufficient GM tokens (public)! Need ${costFormatted} GM, you have ${effectiveBalance} GM.`);
+        return null;
+      }
+
+      console.log('✅ Balance check passed, proceeding with EIP-712...');
+
+      // Create EIP-712 signature for FHE research authorization
+      console.log('🔐 Creating EIP-712 signature for FHE research...');
+
+      const eip712Data = {
+        types: {
+          EIP712Domain: [
+            { name: "name", type: "string" },
+            { name: "version", type: "string" },
+            { name: "chainId", type: "uint256" },
+            { name: "verifyingContract", type: "address" }
+          ],
+          ResearchRequest: [
+            { name: "user", type: "address" },
+            { name: "researchType", type: "uint256" },
+            { name: "cost", type: "uint256" },
+            { name: "timestamp", type: "uint256" }
+          ]
+        },
+        primaryType: "ResearchRequest",
+        domain: {
+          name: "FHE Research",
+          version: "1",
+          chainId: 11155111,
+          verifyingContract: Research_ADDRESS
+        },
+        message: {
+          user: address,
+          researchType: researchType,
+          cost: cost.toString(),
+          timestamp: Math.floor(Date.now() / 1000)
+        }
+      };
+
+      console.log('🔐 Requesting EIP-712 signature from MetaMask...');
+      console.log('🔐 EIP-712 data prepared:', eip712Data);
+      toast('🔐 Please sign the research authorization in MetaMask...', { duration: 5000 });
+
+      const signature = await window.ethereum.request({
+        method: 'eth_signTypedData_v4',
+        params: [address, JSON.stringify(eip712Data)]
+      });
+
+      console.log('✅ EIP-712 signature obtained for research');
+      console.log('🔐 Signature length:', signature?.length || 0);
 
       // Create signer-based contract for write operations
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const researchContractWithSigner = new ethers.Contract(Research_ADDRESS, Research_ABI, signer);
-      
+
+      console.log('📝 Submitting research transaction...');
+      toast('⏳ Submitting research transaction to blockchain...', { duration: 3000 });
+
       // Perform research with topic
       const researchTopic = `AI Research - ${new Date().toISOString()}`;
       const tx = await researchContractWithSigner.performAIResearch(researchTopic);
-      
-      console.log('📝 Research transaction:', tx.hash);
-      toast.success('⏳ Research transaction submitted...');
-      
+
+      console.log('📤 Research transaction sent:', tx.hash);
+      toast('📤 Research transaction submitted - waiting for confirmation...', { duration: 3000 });
+
       // Wait for transaction confirmation
+      console.log('⏳ Waiting for on-chain confirmation...');
       const receipt = await tx.wait();
-      console.log('✅ Research transaction confirmed');
-      
-      toast.success(`🎉 Research completed! ${ethers.formatEther(cost)} GM tokens deducted.`);
-      
+
+      console.log('✅ Research transaction confirmed on-chain!');
+      toast(`🎉 Research completed successfully! ${costFormatted} GM tokens deducted from your balance.`, { duration: 5000 });
+
+      // Dispatch transaction success event to trigger balance reload
+      window.dispatchEvent(new CustomEvent('transactionSuccess', {
+        detail: { type: 'research', amount: costFormatted }
+      }));
+
       // Reload balance after research
       setTimeout(() => {
         console.log('🔄 Reloading balance after research...');
-        loadDataWithContracts(gmTokenContract!, swapContract!, address, true);
+        loadDataWithContracts(gmTokenContract!, swapContract!, researchContract!, address, true);
       }, 2000);
-      
+
       // Return transaction for external use
       return tx;
-      
+
     } catch (error: any) {
       console.error('❌ Research failed:', error);
-      toast.error(`Research failed: ${error.shortMessage || error.message}`);
+      console.error('❌ Error details:', {
+        code: error.code,
+        message: error.message,
+        shortMessage: error.shortMessage,
+        reason: error.reason,
+        stack: error.stack
+      });
+
+      if (error.code === 4001 || error.message?.includes('rejected')) {
+        toast.error('❌ Research cancelled - signature rejected');
+        console.log('🔐 User rejected EIP-712 signature for research');
+      } else if (error.message?.includes('insufficient')) {
+        toast.error('❌ Insufficient GM tokens - please swap ETH to GM first');
+        console.log('💰 Insufficient balance for research');
+      } else {
+        toast.error(`❌ Research failed: ${error.shortMessage || error.message}`);
+        console.log('💥 Unexpected error during research:', error.message);
+      }
+
+      return null;
     } finally {
-      setIsLoading(false);
+      setIsResearching(false);
     }
   };
 
@@ -683,7 +817,7 @@ const useCoinCheckGoFHESimple = () => {
       // Reload balance after funding
       setTimeout(() => {
         console.log('🔄 Reloading balance after funding...');
-        loadDataWithContracts(gmTokenContract!, swapContract!, address, true);
+        loadDataWithContracts(gmTokenContract!, swapContract!, researchContract!, address, true);
         }, 2000);
       
     } catch (error: any) {
@@ -779,7 +913,7 @@ const useCoinCheckGoFHESimple = () => {
       await tx.wait();
       toast.success(`✅ Swapped ${ethAmountStr} ETH for GM tokens!`);
       
-      setTimeout(() => loadDataWithContracts(gmTokenContract!, swapContract, address, true), 2000);
+      setTimeout(() => loadDataWithContracts(gmTokenContract!, swapContract!, researchContract!, address, true), 2000);
     } catch (error: any) {
       console.error('❌ Swap failed:', error);
       toast.error(`Swap failed: ${error.shortMessage || error.message}`);
@@ -840,6 +974,7 @@ const useCoinCheckGoFHESimple = () => {
     isConnected,
     address,
     isLoading,
+    isResearching,
     
     // Contract instances
     gmTokenContract,
