@@ -36,7 +36,8 @@ export interface MarketData {
 }
 
 class CryptoApiService {
-  private baseUrl = 'https://api.coingecko.com/api/v3';
+  // Use Vercel proxy to avoid CORS and attach API key server-side
+  private baseUrl = '/api/cg';
   private cache: Map<string, any> = new Map();
   private cacheTimeout = 5 * 60 * 1000; // 5 minutes
 
@@ -56,10 +57,7 @@ class CryptoApiService {
         sparkline: true,
         price_change_percentage: '24h,7d,30d'
       };
-      const apiKey = process.env.REACT_APP_COINCHECKGO_API_KEY;
-      const headers = apiKey ? { 'x-cg-demo-api-key': apiKey } : undefined;
-
-      let response = await axios.get(`${this.baseUrl}/coins/markets`, { params: paramsBase, headers });
+      let response = await axios.get(`${this.baseUrl}/coins/markets`, { params: paramsBase });
       let data = response.data as CryptoData[];
 
       // If API returns fewer than requested, try aggregating multiple pages without key
@@ -117,8 +115,6 @@ class CryptoApiService {
     if (cached) return cached;
 
     try {
-      const apiKey = process.env.REACT_APP_COINCHECKGO_API_KEY;
-      const headers = apiKey ? { 'x-cg-demo-api-key': apiKey } : undefined;
       const response = await axios.get(`${this.baseUrl}/coins/${id}`, {
         params: {
           localization: false,
@@ -127,8 +123,7 @@ class CryptoApiService {
           community_data: false,
           developer_data: false,
           sparkline: true
-        },
-        headers
+        }
       });
 
       const data = response.data;
