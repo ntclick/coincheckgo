@@ -57,9 +57,9 @@ class CryptoApiService {
         price_change_percentage: '24h,7d,30d'
       };
       const apiKey = process.env.REACT_APP_COINCHECKGO_API_KEY;
-      const paramsWithKey = apiKey ? { ...paramsBase, x_cg_demo_api_key: apiKey } : paramsBase;
+      const headers = apiKey ? { 'x-cg-demo-api-key': apiKey } : undefined;
 
-      let response = await axios.get(`${this.baseUrl}/coins/markets`, { params: paramsWithKey });
+      let response = await axios.get(`${this.baseUrl}/coins/markets`, { params: paramsBase, headers });
       let data = response.data as CryptoData[];
 
       // If API returns fewer than requested, try aggregating multiple pages without key
@@ -118,6 +118,7 @@ class CryptoApiService {
 
     try {
       const apiKey = process.env.REACT_APP_COINCHECKGO_API_KEY;
+      const headers = apiKey ? { 'x-cg-demo-api-key': apiKey } : undefined;
       const response = await axios.get(`${this.baseUrl}/coins/${id}`, {
         params: {
           localization: false,
@@ -125,9 +126,9 @@ class CryptoApiService {
           market_data: true,
           community_data: false,
           developer_data: false,
-          sparkline: true,
-          ...(apiKey ? { x_cg_demo_api_key: apiKey } : {})
-        }
+          sparkline: true
+        },
+        headers
       });
 
       const data = response.data;

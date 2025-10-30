@@ -49,21 +49,29 @@ class AIReportService {
     const prompt = this.buildPrompt(symbol, marketData, technicalData, fundamentalsData);
 
     try {
-      const response = await axios.post(`${this.baseUrl}/chat/completions`, {
-        model: this.model,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a professional cryptocurrency analyst. Provide comprehensive, data-driven analysis with clear recommendations.'
-          },
-          {
-            role: 'user',
-            content: prompt
+      const response = await axios.post(
+        `${this.baseUrl}/chat/completions`,
+        {
+          model: this.model,
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a professional cryptocurrency analyst. Provide comprehensive, data-driven analysis with clear recommendations.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          max_tokens: 2000,
+          temperature: 0.7
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`
           }
-        ],
-        max_tokens: 2000,
-        temperature: 0.7
-      });
+        }
+      );
 
       const content = response.data.choices[0].message.content;
       return this.parseAIResponse(content);
