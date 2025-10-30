@@ -1,5 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+// Simple 60s in-memory cache (per lambda instance)
+const memoryCache = new Map<string, { body: string; status: number; contentType: string; ts: number }>();
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
 // Simple CoinGecko proxy to bypass CORS and attach API key headers
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -12,6 +16,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : originalUrl;
 
     const targetUrl = apiBase + pathWithQuery;
+
+    // Cache key includes method + URL
+    const cacheKey = `${req.method || 'GET'} ${targetUrl}`;
+    const cached = memoryCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+      res.status(cached.status);
+      res.setHeader('Content-Type', cached.contentType || 'application/json');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+      return res.send(cached.body);
+    }
 
     const headers: Record<string, string> = {
       'accept': 'application/json'
@@ -39,6 +54,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Content-Type', resp.headers.get('content-type') || 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    // Save to in-memory cache
+    memoryCache.set(cacheKey, {
+      body: text,
+      status: resp.status,
+      contentType: resp.headers.get('content-type') || 'application/json',
+      ts: Date.now()
+    });
     res.send(text);
   } catch (error: any) {
     res.setHeader('Access-Control-Allow-Origin', '*');
