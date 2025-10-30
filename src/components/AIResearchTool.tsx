@@ -162,8 +162,8 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
     console.log('🔍 Crypto selected:', crypto.symbol);
   };
 
-  // Use global state for wallet connection check
-  const buttonDisabled = !isWalletConnected() || isResearching || !coinSymbol;
+  // Allow research without wallet; only disable when no coin or processing
+  const buttonDisabled = isResearching || !coinSymbol;
 
   // AI Research function - REAL ON-CHAIN TRANSACTION
   const handleResearch = async () => {
@@ -173,8 +173,8 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
       return;
     }
 
-    // Wallet is connected (from logs), proceed with transaction
-    console.log('🚀 Starting research - Wallet connected, proceeding with transaction');
+    const walletConnected = isWalletConnected();
+    console.log('🚀 Starting research', { walletConnected });
 
     setIsResearching(true);
     setResearchError('');
@@ -182,64 +182,40 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
     setResearchProgress('Connecting to blockchain...');
 
     try {
-      // Step 1: Call on-chain research function
-      setResearchProgress('Sending transaction to blockchain...');
-      
-      if (performResearch) {
-        const researchTopic = `AI Research - ${coinSymbol.toUpperCase()} - ${new Date().toISOString()}`;
-        console.log('🔮 Starting AI Research:', researchTopic);
-        
-        // Call performResearch with number parameter (1 = quick analysis)
+      // If wallet connected, try on-chain step; otherwise skip to data fetch
+      if (walletConnected && performResearch) {
+        setResearchProgress('Sending transaction to blockchain...');
         const tx = await performResearch(1);
         console.log('📤 Research transaction sent:', tx?.hash);
-        
         setResearchProgress('Waiting for transaction confirmation...');
-        const receipt = await tx?.wait();
-        console.log('✅ Research transaction confirmed:', receipt?.transactionHash);
-        
-        // Step 2: Only run research logic AFTER on-chain success
-        setResearchProgress('Transaction confirmed! Fetching real-time data...');
-        
-        // Fetch real API data
-        setResearchProgress('Fetching market data from CoinGecko...');
-        const marketData = await cryptoApiService.getCryptoDetails(selectedCrypto!.id);
-        
-        // Set the real market data to selectedCrypto for display
-        setSelectedCrypto(marketData);
-        
-        setResearchProgress('Analyzing technical indicators with Taapi.io...');
-        const technical = await taapiService.getTechnicalAnalysis(coinSymbol.toLowerCase());
-        setTechnicalData(technical);
-        
-        setResearchProgress('Fetching fundamentals from CryptoRank...');
-        const fundamentals = await cryptoRankService.getFundamentals(coinSymbol.toLowerCase());
-        setFundamentalsData(fundamentals);
-        
-        setResearchProgress('Generating AI report with OpenAI...');
-        console.log('🔍 Generating AI report with data:', {
-          coinSymbol,
-          marketData: marketData ? 'Available' : 'Missing',
-          technical: technical ? 'Available' : 'Missing',
-          fundamentals: fundamentals ? 'Available' : 'Missing'
-        });
-        const aiReport = await aiReportService.generateReport(
-          coinSymbol,
-          marketData,
-          technical,
-          fundamentals
-        );
-        console.log('✅ AI report generated successfully:', aiReport);
-        
-        setResearchData(aiReport);
-        setResearchProgress('✅ Research completed! 10 GM tokens deducted from wallet.');
-        
-        // Refresh balance after successful research
-        // Note: Balance will be refreshed automatically by the hook
-        console.log('🔄 Balance will be refreshed automatically by the hook');
-        
+        await tx?.wait();
+        console.log('✅ Research transaction confirmed');
       } else {
-        throw new Error('Research function not available');
+        console.log('ℹ️ Wallet not connected or on-chain step unavailable; proceeding with off-chain research');
       }
+
+      // Fetch real API data
+      setResearchProgress('Fetching market data from CoinGecko...');
+      const marketData = await cryptoApiService.getCryptoDetails(selectedCrypto!.id);
+      setSelectedCrypto(marketData);
+
+      setResearchProgress('Analyzing technical indicators with Taapi.io...');
+      const technical = await taapiService.getTechnicalAnalysis(coinSymbol.toLowerCase());
+      setTechnicalData(technical);
+
+      setResearchProgress('Fetching fundamentals from CryptoRank...');
+      const fundamentals = await cryptoRankService.getFundamentals(coinSymbol.toLowerCase());
+      setFundamentalsData(fundamentals);
+
+      setResearchProgress('Generating AI report with OpenAI...');
+      const aiReport = await aiReportService.generateReport(
+        coinSymbol,
+        marketData,
+        technical,
+        fundamentals
+      );
+      setResearchData(aiReport);
+      setResearchProgress('✅ Research completed.');
     } catch (error: any) {
       console.error('Research failed:', error);
       setResearchError(`Research failed: ${error.message || error}`);
@@ -370,8 +346,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               whiteSpace: 'nowrap'
             }}
           >
-{isResearching ? '⏳ Processing...' : 
- isWalletConnected() ? `🔮 Research (${getTokenCost()} GM)` : '🔒 Connect Wallet'}
+{isResearching ? '⏳ Processing...' : `🔮 Research (${getTokenCost()} GM)`}
           </button>
         </div>
         
