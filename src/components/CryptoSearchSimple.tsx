@@ -19,38 +19,36 @@ const CryptoSearchSimple: React.FC<CryptoSearchSimpleProps> = ({
   const [showDropdown, setShowDropdown] = useState(false);
 
   useEffect(() => {
-    const run = async () => {
-      const q = query.toLowerCase();
-      if (q.length < 2) {
-        // Show up to 300 when no/short query
-        setFilteredCryptos(cryptos.slice(0, 300));
-        return;
-      }
+    const q = query.toLowerCase();
+    if (q.length < 2) {
+      // Show up to 300 when no/short query
+      setFilteredCryptos(cryptos.slice(0, 300));
+      return;
+    }
 
-      // Local filter first
-      const localFiltered = cryptos.filter(crypto => 
-        crypto.name.toLowerCase().includes(q) ||
-        crypto.symbol.toLowerCase().includes(q) ||
-        (crypto as any).id?.toLowerCase()?.includes(q)
-      );
+    // Local filter first (instant, no API)
+    const localFiltered = cryptos.filter(crypto => 
+      crypto.name.toLowerCase().includes(q) ||
+      crypto.symbol.toLowerCase().includes(q) ||
+      (crypto as any).id?.toLowerCase()?.includes(q)
+    );
+    setFilteredCryptos(localFiltered.slice(0, 300));
 
-      // If too few local matches, query CoinGecko search and merge
-      if (localFiltered.length < 10) {
+    // Debounced remote merge when local too ít kết quả
+    if (localFiltered.length < 10) {
+      const handle = setTimeout(async () => {
         try {
           const remote = await cryptoApiService.searchCryptocurrencies(query);
           const byId = new Map<string, CryptoData>();
           for (const c of localFiltered) if ((c as any)?.id) byId.set((c as any).id, c);
           for (const c of remote) if ((c as any)?.id) byId.set((c as any).id, c as any);
           setFilteredCryptos(Array.from(byId.values()).slice(0, 300));
-          return;
         } catch {
-          // ignore and use local only
+          // ignore, keep local results
         }
-      }
-
-      setFilteredCryptos(localFiltered.slice(0, 300));
-    };
-    run();
+      }, 400); // debounce 400ms
+      return () => clearTimeout(handle);
+    }
   }, [query, cryptos]);
 
   const handleSelect = (crypto: CryptoData) => {
