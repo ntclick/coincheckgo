@@ -1,57 +1,56 @@
 # 🔮 CoinCheckGo - AI Crypto Research Platform
 
-Nền tảng nghiên cứu cryptocurrency với AI, tích hợp dữ liệu từ nhiều nguồn uy tín. Sử dụng **Fully Homomorphic Encryption (FHE)** để bảo vệ quyền riêng tư.
+An AI-powered crypto research platform aggregating trusted market, technical, and fundamentals data — with privacy by default using **Fully Homomorphic Encryption (FHE)**.
 
 🌐 **Website**: [coincheckgo.com](http://coincheckgo.com/) | 🚀 **Demo**: [coincheckgofhe.vercel.app](https://coincheckgofhe.vercel.app/) | 👤 **Author**: [@trungkts29](https://x.com/trungkts29)
 
 ---
 
-## ✨ Chức năng chính
+## ✨ Core Features
 
 ### 🤖 AI Research Tool
-**Chỉ cần nhập tên token → Nhận báo cáo đầy đủ**
+**Type a token name → Get a complete investment-grade report**
 
-- ✅ Market data (CoinGecko): Giá, volume, market cap, 24h high/low
+- ✅ Market Data (CoinGecko): Price, volume, market cap, 24h high/low
 - ✅ Technical Analysis (Taapi.io): RSI, MACD, EMA, Bollinger Bands, ADX
-- ✅ Fundamentals (CryptoRank): Tokenomics, investment funds
-- ✅ AI Report (OpenAI): Báo cáo phân tích chuyên sâu với insights
-- ✅ Live Charts (TradingView): Biểu đồ giá real-time
+- ✅ Fundamentals (CryptoRank): Tokenomics, top investment funds
+- ✅ AI Report (OpenAI): Expert-style, human-readable insights
+- ✅ Live Charts (TradingView): Real-time price charts
 
 **Cost**: 10 GM tokens per research
 
 ### 💰 Token System
-- **GM Token**: Native token của nền tảng
-- **ETH ↔ GM Swap**: Swap ETH sang GM và ngược lại
-- **FHE Encryption**: Số dư token được mã hóa hoàn toàn
-- **Auto Approval**: Approve 100 GM một lần, dùng cho 10 research
+- **GM Token**: The platform’s native utility token
+- **ETH ↔ GM Swap**: Swap both directions
+- **FHE Encryption**: Balances are fully encrypted at rest and on-chain
+- **Smart Approval**: Approve 100 GM once to cover ~10 researches
 
 ### 📊 Market Dashboard
 - Top 300 cryptocurrencies
 - Market capitalization (20 items/page)
 - Top gainers/losers (5 items each)
-- News feed từ CoinDesk, Decrypt, CoinTelegraph
+- News feed from CoinDesk, Decrypt, CoinTelegraph
 
 ---
 
-## 🚀 Roadmap - Phát triển tương lai
+## 🚀 Roadmap
 
-### 🎯 Vision: One-Click Comprehensive Research
+### 🎯 Vision: One‑Click Comprehensive Research
+Enter a token/project name → receive a complete institutional-grade profile.
 
-Chỉ cần nhập tên token/dự án → Nhận đầy đủ thông tin đầu tư:
-
-#### Dữ liệu sẽ tích hợp:
+#### Upcoming Data Integrations
 - **DeFiLlama**: TVL, protocol metrics, DeFi rankings
 - **Messari**: Research reports, analytics, metrics
-- **Token Unlock**: Unlock schedules, vesting info, distribution timeline
-- **Social Signals**: Twitter sentiment, Reddit activity, Discord metrics, GitHub activity
+- **Token Unlocks**: Schedules, vesting, distributions
+- **Social Signals**: Twitter/Reddit/Discord sentiment, GitHub activity
 
-#### Thông tin sẽ hiển thị:
-- 📈 **Investment Info**: Top funds đã đầu tư, funding rounds, valuations
-- 📅 **Unlock Schedule**: Lịch unlock chi tiết, vesting, token distribution
-- 💎 **Tokenomics**: Supply breakdown, distribution, staking rewards
-- 📰 **News & Updates**: Tin tức từ nhiều nguồn, social sentiment
-- 📊 **Research Reports**: AI-generated reports với technical & fundamental analysis
-- 💹 **Market Data**: Real-time price, volume, market cap tracking
+#### What You’ll See
+- 📈 **Investment Intelligence**: Top funds invested, rounds, valuations
+- 📅 **Unlock Schedule**: Precise timelines, vesting, distributions
+- 💎 **Tokenomics**: Supply breakdown, allocations, staking rewards
+- 📰 **News & Sentiment**: Multi-source feeds with sentiment blending
+- 📊 **AI Reports**: TA + fundamentals + market context, readable tone
+- 💹 **Live Market Data**: Price, volume, market cap in real time
 
 ---
 
@@ -62,18 +61,18 @@ Chỉ cần nhập tên token/dự án → Nhận đầy đủ thông tin đầu
 - **Privacy**: FHEVM SDK (Fully Homomorphic Encryption)
 - **Smart Contracts**: Solidity (Hardhat)
 - **APIs**: CoinGecko, Taapi.io, CryptoRank, OpenAI, TradingView
-- **Deploy**: Vercel
+- **Hosting**: Vercel
 
 ---
 
 ## 📦 Quick Start
 
-### 1. Install
+### 1) Install
 ```bash
 npm install
 ```
 
-### 2. Setup `.env`
+### 2) Configure `.env`
 ```env
 REACT_APP_SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_KEY
 
@@ -90,7 +89,7 @@ REACT_APP_CRYPTORANK_API_KEY=your_key
 REACT_APP_TAAPI_API_KEY=your_key
 ```
 
-### 3. Run
+### 3) Run
 ```bash
 npm start
 ```
@@ -99,20 +98,20 @@ npm start
 
 ## 📋 Smart Contracts
 
-| Contract | Address | Function |
-|----------|---------|----------|
-| GM Token | `0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08` | ERC20 + FHE encryption |
+| Contract | Address | Purpose |
+|----------|---------|---------|
+| GM Token | `0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08` | ERC20 + FHE balance encryption |
 | Swap | `0x438A2ce1B563E71b68F2f0EE0575736CccF3231e` | ETH ↔ GM swap |
-| Research AI | `0xBD341699753FEa3305bf16Eaf8228A1F96E945fF` | AI research với FHE |
+| Research AI | `0xBD341699753FEa3305bf16Eaf8228A1F96E945fF` | AI research with (FHE‑ready) flows |
 
 ---
 
 ## 🔐 Privacy Features
 
-- **FHE Encryption**: Token balances được mã hóa hoàn toàn
-- **EIP-712 Signatures**: Xác thực an toàn cho giải mã
-- **On-chain Validation**: Tất cả validation trên blockchain
-- **No Data Storage**: Không lưu dữ liệu nhạy cảm trên server
+- **FHE Encryption**: Token balances encrypted end‑to‑end
+- **EIP‑712 Signatures**: Secure user-side decryption setup
+- **On‑chain Validation**: Business rules enforced on-chain
+- **No Sensitive Storage**: No server‑side storage of private data
 
 ---
 
@@ -138,7 +137,7 @@ src/
 
 ## 🌐 Links
 
-- **Production**: [coincheckgo.com](http://coincheckgo.com/) *(Coming soon)*
+- **Production**: [coincheckgo.com](http://coincheckgo.com/) *(coming soon)*
 - **Demo**: [coincheckgofhe.vercel.app](https://coincheckgofhe.vercel.app/)
 - **Author**: [@trungkts29](https://x.com/trungkts29)
 
@@ -150,4 +149,4 @@ MIT License
 
 ---
 
-**Note**: Hiện tại chạy trên Sepolia Testnet. Cần Sepolia ETH và MetaMask để sử dụng.
+**Note**: Runs on Sepolia Testnet. You’ll need Sepolia ETH and MetaMask to use the app.
