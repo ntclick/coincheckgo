@@ -5,7 +5,7 @@ import { taapiService, TechnicalAnalysis } from '../services/taapiService';
 import { cryptoRankService, CryptoRankFundamentals, getTopFunds } from '../services/cryptoRankService';
 import { aiReportService, AIReport } from '../services/aiReportService';
 import CryptoSearchSimple from './CryptoSearchSimple';
-import DexScreenerChart from './DexScreenerChart';
+import CoinChart from './CoinChart';
 import './OriginalDesign.css';
 
 interface AIResearchToolProps {
@@ -823,10 +823,12 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               overflow: 'hidden',
               position: 'relative'
             }}>
-              <DexScreenerChart 
-                symbol={getTVSymbol(selectedCrypto?.symbol)} 
-                height={500} 
-                theme={'dark'}
+              <CoinChart 
+                symbol={(getTVSymbol(selectedCrypto?.symbol) || 'BINANCE:BTCUSDT').split(':').pop()?.replace('/', '') || 'BTCUSDT'}
+                height={500}
+                dark={true}
+                enableRealtime={true}
+                interval={'1h'}
               />
               
               {/* Chart Info Overlay */}
@@ -841,7 +843,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
                 color: 'rgba(255, 255, 255, 0.8)',
                 border: '1px solid rgba(255, 255, 255, 0.1)'
               }}>
-                Real-time data from DexScreener
+                Real-time data (Binance public API)
               </div>
             </div>
             
