@@ -18,18 +18,44 @@ export default async function handler(req: any, res: any) {
       pathStr = '/' + pathArray.join('/');
     }
     
-    // Get query string from original URL - Vercel provides req.url with full path
-    // Example: req.url = '/api/cg/coins/markets?vs_currency=usd&...'
+    // Get query string from req.url or req.query
+    // Vercel provides req.url with full path: '/api/cg/coins/markets?vs_currency=usd&...'
+    // Also check req.query for additional params
     let query = '';
-    if (req.url) {
+    if (req.url && req.url.includes('?')) {
       const urlParts = req.url.split('?');
       if (urlParts.length > 1) {
         query = '?' + urlParts.slice(1).join('?');
+      }
+    } else if (req.query) {
+      // Build query string from req.query (exclude 'path' param)
+      const queryParams = new URLSearchParams();
+      for (const [key, value] of Object.entries(req.query)) {
+        if (key !== 'path' && value !== undefined && value !== null) {
+          if (Array.isArray(value)) {
+            value.forEach(v => queryParams.append(key, String(v)));
+          } else {
+            queryParams.append(key, String(value));
+          }
+        }
+      }
+      const queryString = queryParams.toString();
+      if (queryString) {
+        query = '?' + queryString;
       }
     }
     
     const targetPath = pathStr + query;
     const targetUrl = apiBase + targetPath;
+    
+    // Debug logging (remove in production if needed)
+    console.log('[CG Proxy]', {
+      path: pathArray,
+      pathStr,
+      query,
+      targetUrl,
+      originalUrl: req.url
+    });
 
     // Cache key includes method + URL
     const cacheKey = `${req.method || 'GET'} ${targetUrl}`;
