@@ -3,17 +3,21 @@ const memoryCache = new Map<string, { body: string; status: number; contentType:
 const CACHE_TTL_MS = 60 * 1000; // 60 seconds
 
 // Simple CoinGecko proxy to bypass CORS and attach API key headers
+// Vercel dynamic route: /api/cg/[...path] handles /api/cg/coins/markets, /api/cg/coins/bitcoin, etc.
 export default async function handler(req: any, res: any) {
   try {
     const apiBase = 'https://api.coingecko.com/api/v3';
-    // Rebuild target URL by stripping the /api/cg prefix
-    const originalUrl = req.url || '/';
-    const prefix = '/api/cg';
-    const pathWithQuery = originalUrl.startsWith(prefix)
-      ? originalUrl.substring(prefix.length) || '/'
-      : originalUrl;
-
-    const targetUrl = apiBase + pathWithQuery;
+    
+    // Get path from Vercel dynamic route - path is an array or string
+    const path = req.query.path || [];
+    const pathArray = Array.isArray(path) ? path : [path];
+    const pathStr = '/' + pathArray.join('/');
+    
+    // Get query string from original URL (Vercel already parsed it)
+    const query = req.url?.split('?')[1] || '';
+    const targetPath = pathStr + (query ? '?' + query : '');
+    
+    const targetUrl = apiBase + targetPath;
 
     // Cache key includes method + URL
     const cacheKey = `${req.method || 'GET'} ${targetUrl}`;

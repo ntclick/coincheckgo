@@ -12,12 +12,6 @@
         }
       ]
     }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/cg/(.*)",
-      "destination": "/api/cg?path=$1"
-    }
   ]
 }
 
