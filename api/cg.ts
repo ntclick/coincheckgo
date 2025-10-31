@@ -1,11 +1,9 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
 // Simple 60s in-memory cache (per lambda instance)
 const memoryCache = new Map<string, { body: string; status: number; contentType: string; ts: number }>();
 const CACHE_TTL_MS = 60 * 1000; // 60 seconds
 
 // Simple CoinGecko proxy to bypass CORS and attach API key headers
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   try {
     const apiBase = 'https://api.coingecko.com/api/v3';
     // Rebuild target URL by stripping the /api/cg prefix

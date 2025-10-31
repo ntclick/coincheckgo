@@ -115,6 +115,32 @@ npm start
 
 ---
 
+## 🔎 Where FHE Is Used (Exactly)
+
+- **Confidential GM Balances (YES, FHE)**
+  - GM token balances are stored on-chain in encrypted form.
+  - The app performs a one-time EIP‑712 signature to establish a local decryption session.
+  - Until decrypted, the UI shows the public GM balance; after decryption, it prefers the confidential balance.
+
+- **AI Research Payment (FHE‑ready on-chain deduction)**
+  - Research costs 10 GM. The contract supports confidential (FHE) balance accounting for deductions when available on the target network/tooling.
+  - ERC‑20 approval and spending cap prompts are standard (public) allowance mechanics.
+
+- **Swaps**
+  - ETH → GM: Public mint/swap path (non‑FHE), suitable for onboarding.
+  - GM → ETH: FHE spend path is supported (confidential GM to public ETH).
+
+- **Not FHE (by design)**
+  - Market/price/news data (CoinGecko, CryptoRank, feeds)
+  - TA indicators (Taapi.io) and AI text output
+  - Wallet address, tx hashes, and on-chain metadata
+
+Notes:
+- FHE decryption happens locally and keys never leave the browser.
+- If FHE SDK is not initialized yet, the app gracefully falls back to public balances for display, without exposing confidential values.
+
+---
+
 ## 📂 Project Structure
 
 ```
