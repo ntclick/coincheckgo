@@ -1,0 +1,10 @@
+[33m846ca1a[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Update: Optimize AI Research, Technical Analysis validation, and improve UX
+[33m959aa2f[m security: remove API keys and private key from .env file for security
+[33m7b646ac[m feat: deploy new ResearchAIConfidential contract (FHE standard) and update addresses
+[33m22cbafe[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix(build): guard provider in contract code check to avoid TS error on Vercel
+[33m9603140[m build: switch from craco to react-scripts for Vercel build
+[33m2bf7b86[m feat(search): debounce 400ms remote CoinGecko search; prefer local top_coins.json for suggestions
+[33m05ebacf[m feat(proxy-cache): add 60s in-memory cache to CoinGecko proxy (reduces 429)
+[33meb69273[m feat(proxy): add Vercel serverless CoinGecko proxy and switch frontend to /api/cg
+[33me32b5b0[m feat(ai-research): allow research without wallet; remove connect wallet prompt; always use real API data
+[33m472ee0c[m fix(api): add OpenAI Authorization header and send CoinGecko key via header; remove query param usage
