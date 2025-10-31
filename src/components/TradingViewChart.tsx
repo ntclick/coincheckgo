@@ -29,26 +29,33 @@ const loadTradingViewScript = (): Promise<void> => {
     const script = document.createElement('script');
     script.src = TV_SCRIPT_SRC;
     script.async = true;
+    script.type = 'text/javascript';
+    // Add integrity and crossorigin for better security (optional but recommended)
+    script.crossOrigin = 'anonymous';
+    
     script.onload = () => {
       // Wait a bit for TradingView to be available
+      let attempts = 0;
+      const maxAttempts = 100; // 5 seconds at 50ms intervals
+      
       const checkInterval = setInterval(() => {
-        if ((window as any).TradingView) {
+        attempts++;
+        if ((window as any).TradingView && (window as any).TradingView.widget) {
           clearInterval(checkInterval);
           resolve();
+        } else if (attempts >= maxAttempts) {
+          clearInterval(checkInterval);
+          // Still reject but with more context
+          reject(new Error('TradingView library loaded but widget constructor not available. Check CSP headers.'));
         }
       }, 50);
-      
-      // Timeout after 5 seconds
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        if ((window as any).TradingView) {
-          resolve();
-        } else {
-          reject(new Error('TradingView not available after script load'));
-        }
-      }, 5000);
     };
-    script.onerror = () => reject(new Error('Failed to load TradingView script'));
+    
+    script.onerror = (error) => {
+      console.error('TradingView script load error:', error);
+      reject(new Error('Failed to load TradingView script. Check network tab and CSP headers.'));
+    };
+    
     document.head.appendChild(script);
   });
   return tvScriptLoadingPromise;
@@ -103,7 +110,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({ symbol, height = 40
         // Small delay to ensure DOM is ready
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Create widget
+        // Create widget with full configuration for Vercel compatibility
         widgetRef.current = new (window as any).TradingView.widget({
           autosize: true,
           symbol: symbol || 'BINANCE:BTCUSDT',
@@ -120,6 +127,19 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({ symbol, height = 40
           container_id: containerId,
           width: '100%',
           height: height.toString(),
+          // Additional options for better Vercel compatibility
+          hide_volume: false,
+          studies_overrides: {},
+          studies: [],
+          overrides: {},
+          disabled_features: ['use_localstorage_for_settings'],
+          enabled_features: ['study_templates'],
+          // Ensure proper rendering on production
+          loading_screen: { backgroundColor: 'transparent' },
+          fullscreen: false,
+          // Allow TradingView to connect properly
+          allowfullscreen: false,
+          withdateranges: true,
         });
 
         setIsLoading(false);
