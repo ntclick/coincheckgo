@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface TradingViewChartProps {
   symbol: string; // e.g., 'BINANCE:BTCUSDT'
@@ -11,11 +11,43 @@ let tvScriptLoadingPromise: Promise<void> | null = null;
 
 const loadTradingViewScript = (): Promise<void> => {
   if (tvScriptLoadingPromise) return tvScriptLoadingPromise;
+  
+  // Check if already loaded
+  if ((window as any).TradingView) {
+    tvScriptLoadingPromise = Promise.resolve();
+    return tvScriptLoadingPromise;
+  }
+  
   tvScriptLoadingPromise = new Promise((resolve, reject) => {
+    const existingScript = document.querySelector(`script[src="${TV_SCRIPT_SRC}"]`);
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve());
+      existingScript.addEventListener('error', () => reject(new Error('Failed to load TradingView script')));
+      return;
+    }
+    
     const script = document.createElement('script');
     script.src = TV_SCRIPT_SRC;
     script.async = true;
-    script.onload = () => resolve();
+    script.onload = () => {
+      // Wait a bit for TradingView to be available
+      const checkInterval = setInterval(() => {
+        if ((window as any).TradingView) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 50);
+      
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if ((window as any).TradingView) {
+          resolve();
+        } else {
+          reject(new Error('TradingView not available after script load'));
+        }
+      }, 5000);
+    };
     script.onerror = () => reject(new Error('Failed to load TradingView script'));
     document.head.appendChild(script);
   });
@@ -24,53 +56,130 @@ const loadTradingViewScript = (): Promise<void> => {
 
 const TradingViewChart: React.FC<TradingViewChartProps> = ({ symbol, height = 400, theme = 'dark' }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const widgetRef = useRef<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    let widget: any = null;
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Ensure container has a unique ID
+    if (!container.id) {
+      container.id = `tv_widget_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+    }
+
+    const containerId = container.id;
+
+    // Clean up previous widget
+    if (widgetRef.current) {
+      try {
+        // Clear container content
+        container.innerHTML = '';
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      widgetRef.current = null;
+    }
+
+    setIsLoading(true);
+    setError(null);
 
     const initWidget = async () => {
       try {
+        // Wait for script to load
         await loadTradingViewScript();
-        if (containerRef.current && (window as any).TradingView) {
-          widget = new (window as any).TradingView.widget({
-            autosize: true,
-            symbol,
-            interval: '60',
-            timezone: 'Etc/UTC',
-            theme: theme === 'dark' ? 'dark' : 'light',
-            style: '1',
-            locale: 'en',
-            toolbar_bg: 'rgba(0, 0, 0, 0.2)',
-            enable_publishing: false,
-            allow_symbol_change: false,
-            hide_top_toolbar: false,
-            container_id: containerRef.current.id,
-          });
+        
+        // Double check TradingView is available
+        if (!(window as any).TradingView) {
+          throw new Error('TradingView library not available');
         }
-      } catch (e) {
-        // Silent fail; UI should continue without chart
-        // eslint-disable-next-line no-console
-        console.warn('TradingView widget failed to initialize:', e);
+
+        // Ensure container still exists and is mounted
+        if (!containerRef.current || containerRef.current.id !== containerId) {
+          return;
+        }
+
+        // Small delay to ensure DOM is ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Create widget
+        widgetRef.current = new (window as any).TradingView.widget({
+          autosize: true,
+          symbol: symbol || 'BINANCE:BTCUSDT',
+          interval: '60',
+          timezone: 'Etc/UTC',
+          theme: theme === 'dark' ? 'dark' : 'light',
+          style: '1',
+          locale: 'en',
+          toolbar_bg: theme === 'dark' ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)',
+          enable_publishing: false,
+          allow_symbol_change: false,
+          hide_top_toolbar: false,
+          save_image: false,
+          container_id: containerId,
+          width: '100%',
+          height: height.toString(),
+        });
+
+        setIsLoading(false);
+      } catch (e: any) {
+        console.error('TradingView widget failed to initialize:', e);
+        setError(e?.message || 'Failed to load chart');
+        setIsLoading(false);
       }
     };
-
-    if (containerRef.current && !containerRef.current.id) {
-      containerRef.current.id = `tv_widget_${Math.random().toString(36).slice(2)}`;
-    }
 
     initWidget();
 
     return () => {
-      // TradingView does not provide a public destroy; rely on DOM cleanup
-      widget = null;
+      // Cleanup
+      if (widgetRef.current) {
+        widgetRef.current = null;
+      }
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+      }
     };
-  }, [symbol, theme]);
+  }, [symbol, theme, height]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', height }}
-    />
+    <div style={{ width: '100%', height, position: 'relative' }}>
+      <div
+        ref={containerRef}
+        style={{ 
+          width: '100%', 
+          height: '100%',
+          minHeight: '400px'
+        }}
+      />
+      {isLoading && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          color: 'rgba(255, 255, 255, 0.7)',
+          fontSize: '14px'
+        }}>
+          Loading chart...
+        </div>
+      )}
+      {error && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          color: 'rgba(255, 100, 100, 0.8)',
+          fontSize: '14px',
+          textAlign: 'center',
+          padding: '20px'
+        }}>
+          Chart unavailable: {error}
+        </div>
+      )}
+    </div>
   );
 };
 
