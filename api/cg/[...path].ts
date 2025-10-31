@@ -18,22 +18,20 @@ export default async function handler(req: any, res: any) {
       pathStr = '/' + pathArray.join('/');
     }
     
-    // Get query string from req.url or req.query
-    // Vercel provides req.url with full path: '/api/cg/coins/markets?vs_currency=usd&...'
-    // Also check req.query for additional params
+    // Get query string from req.query (Vercel parses query params for dynamic routes)
+    // Priority: req.query > req.url (req.query is more reliable for dynamic routes)
     let query = '';
-    if (req.url && req.url.includes('?')) {
-      const urlParts = req.url.split('?');
-      if (urlParts.length > 1) {
-        query = '?' + urlParts.slice(1).join('?');
-      }
-    } else if (req.query) {
-      // Build query string from req.query (exclude 'path' param)
+    if (req.query && Object.keys(req.query).length > 0) {
+      // Build query string from req.query (exclude 'path' param which is the route param)
       const queryParams = new URLSearchParams();
       for (const [key, value] of Object.entries(req.query)) {
-        if (key !== 'path' && value !== undefined && value !== null) {
+        if (key !== 'path' && value !== undefined && value !== null && value !== '') {
           if (Array.isArray(value)) {
-            value.forEach(v => queryParams.append(key, String(v)));
+            value.forEach(v => {
+              if (v !== undefined && v !== null && v !== '') {
+                queryParams.append(key, String(v));
+              }
+            });
           } else {
             queryParams.append(key, String(value));
           }
@@ -42,6 +40,12 @@ export default async function handler(req: any, res: any) {
       const queryString = queryParams.toString();
       if (queryString) {
         query = '?' + queryString;
+      }
+    } else if (req.url && req.url.includes('?')) {
+      // Fallback to req.url if req.query is empty
+      const urlParts = req.url.split('?');
+      if (urlParts.length > 1) {
+        query = '?' + urlParts.slice(1).join('?');
       }
     }
     
