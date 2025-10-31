@@ -18,11 +18,21 @@ function mapSymbolToDexPair(symbol?: string): string {
   if (parts.length !== 2) return 'ethereum/ethusdt';
   const [exchange, pair] = parts;
   const lower = pair.toLowerCase();
-  // Heuristic mapping
-  // - BINANCE => binance (BSC) if common BSC pairs, else fallback ethereum
-  // - By default use 'ethereum'
-  if (exchange.toUpperCase() === 'BINANCE') {
-    return `binance/${lower}`;
+  // Heuristic mapping by venue
+  switch (exchange.toUpperCase()) {
+    case 'BINANCE':
+      // Dexscreener uses 'bsc' for Binance Smart Chain
+      return `bsc/${lower}`;
+    case 'ETHEREUM':
+      return `ethereum/${lower}`;
+    case 'ARBITRUM':
+      return `arbitrum/${lower}`;
+    case 'BASE':
+      return `base/${lower}`;
+    case 'SOLANA':
+      return `solana/${lower}`;
+    default:
+      break;
   }
   return `ethereum/${lower}`;
 }
