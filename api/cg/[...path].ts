@@ -52,13 +52,16 @@ export default async function handler(req: any, res: any) {
     const targetPath = pathStr + query;
     const targetUrl = apiBase + targetPath;
     
-    // Debug logging (remove in production if needed)
-    console.log('[CG Proxy]', {
+    // Debug logging
+    console.log('[CG Proxy] Request received:', {
+      method: req.method,
+      url: req.url,
+      query: req.query,
       path: pathArray,
       pathStr,
-      query,
+      queryString: query,
       targetUrl,
-      originalUrl: req.url
+      hasQuery: !!req.query && Object.keys(req.query).length > 0
     });
 
     // Cache key includes method + URL
