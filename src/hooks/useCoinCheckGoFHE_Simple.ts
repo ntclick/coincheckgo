@@ -864,8 +864,8 @@ const useCoinCheckGoFHESimple = () => {
 
       console.log('✅ Research transaction confirmed on-chain!');
       
-      // Show "đang nhận kết quả" (receiving results) message
-      toast('📊 Đang nhận kết quả... Vui lòng đợi.', { duration: 8000 });
+      // Show "receiving results" message
+      toast('📊 Receiving results... Please wait.', { duration: 8000 });
 
       // Dispatch transaction success event to trigger balance reload ONLY
       window.dispatchEvent(new CustomEvent('transactionSuccess', {

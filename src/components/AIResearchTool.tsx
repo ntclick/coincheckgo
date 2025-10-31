@@ -141,7 +141,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
   };
 
   // Disable button when: no coin selected, not connected, or researching/processing
-  // Also disable when researchProgress is active (includes "đang gen content" phase)
+  // Also disable when researchProgress is active (includes "generating content" phase)
   const buttonDisabled = !isConnected || !coinSymbol || isResearching || !!researchProgress;
 
   // AI Research function - NORMAL TRANSACTION WITH ONCHAIN CHECK
@@ -175,7 +175,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
       }
 
       console.log('✅ Research transaction confirmed on-chain:', tx.hash);
-      setResearchProgress('✅ Transaction confirmed - Đang tiếp tục xử lý...');
+      setResearchProgress('✅ Transaction confirmed - Processing...');
 
       // Now proceed with API data fetching (only after successful on-chain transaction)
       // This is the main processing phase - DO NOT reload page here
@@ -337,7 +337,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               color: 'rgba(255, 255, 255, 0.8)',
               fontSize: '14px',
               margin: '0'
-            }}>Đang tạo báo cáo phân tích chi tiết...</p>
+            }}>Generating detailed analysis report...</p>
           </div>
         </div>
       )}

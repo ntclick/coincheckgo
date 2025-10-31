@@ -1,7 +1,11 @@
 {
-  "name": "unlimited-checkin-react-app",
+  "name": "coincheckgo",
   "version": "1.0.0",
-  "description": "Unlimited Check-In React App - Simple & Clean",
+  "description": "AI Crypto Research Platform with FHE Encryption",
+  "author": {
+    "name": "trungkts29",
+    "url": "https://x.com/trungkts29"
+  },
   "private": true,
   "dependencies": {
     "@zama-fhe/relayer-sdk": "^0.2.0",

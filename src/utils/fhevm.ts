@@ -1,7 +1,8 @@
 /**
- * FHEVM Utilities - Chuẩn Zama FHEVM Integration v0.2.0
+ * FHEVM Utilities - Zama FHEVM Integration v0.2.0
  * Handles FHE operations, encryption, decryption, and ACL permissions
  * Based on: https://docs.zama.ai/protocol/relayer-sdk-guides/development-guide/webapp
+ * Author: @trungkts29 (https://x.com/trungkts29)
  */
 
 import { BrowserProvider } from 'ethers';
@@ -20,7 +21,7 @@ let fhevmSDK: any = null;
 let sdkLoaded = false;
 let autoInitialized = false;
 
-// FHEVM Configuration theo Zama SepoliaConfig - Sử dụng env variables
+// FHEVM Configuration according to Zama SepoliaConfig - Using env variables
 const FHEVM_CONFIG = {
   aclContractAddress: process.env.REACT_APP_ACL_CONTRACT || '0x687820221192C5B662b25367F70076A37bc79b6c',
   kmsContractAddress: process.env.REACT_APP_KMS_VERIFIER_CONTRACT || '0x1364cBBf2cDF5032C47d8226a6f6FBD2AFCDacAC',
@@ -110,7 +111,7 @@ export const autoInitializeFHEVM = async (): Promise<boolean> => {
     await initSDK();
     console.log('✅ FHEVM WASM auto-loaded');
 
-    // Create instance theo hướng dẫn Zama Protocol GPT
+    // Create instance according to Zama Protocol documentation
     const config = {
       ...SepoliaConfig,
       relayerUrl: FHEVM_CONFIG.relayerUrl,

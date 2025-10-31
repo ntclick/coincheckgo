@@ -34,7 +34,7 @@ const CryptoSearchSimple: React.FC<CryptoSearchSimpleProps> = ({
     );
     setFilteredCryptos(localFiltered.slice(0, 300));
 
-    // Debounced remote merge when local too ít kết quả
+    // Debounced remote merge when local results are too few
     if (localFiltered.length < 10) {
       const handle = setTimeout(async () => {
         try {

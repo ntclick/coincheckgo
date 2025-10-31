@@ -186,18 +186,41 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({ symbol, height = 40
         </div>
       )}
       {error && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          color: 'rgba(255, 100, 100, 0.8)',
-          fontSize: '14px',
-          textAlign: 'center',
-          padding: '20px'
-        }}>
-          Chart unavailable: {error}
-        </div>
+        <>
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            color: 'rgba(255, 100, 100, 0.8)',
+            fontSize: '14px',
+            textAlign: 'center',
+            padding: '20px',
+            zIndex: 10
+          }}>
+            Chart unavailable: {error}
+            <div style={{ marginTop: '10px', fontSize: '12px', opacity: 0.7 }}>
+              Falling back to embedded widget...
+            </div>
+          </div>
+          {/* Fallback: Use iframe embed widget if Widget API fails */}
+          <iframe
+            src={`https://s.tradingview.com/embed-widget/advanced-chart/?symbol=${encodeURIComponent(symbol || 'BINANCE:BTCUSDT')}&interval=60&theme=${theme}&style=1&locale=en&hide_volume=false&hide_top_toolbar=false&allow_symbol_change=false&save_image=false&studies=[]&support_host=https://www.tradingview.com`}
+            width="100%"
+            height={height.toString()}
+            frameBorder="0"
+            allowTransparency={true}
+            scrolling="no"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: 'none'
+            }}
+          />
+        </>
       )}
     </div>
   );
