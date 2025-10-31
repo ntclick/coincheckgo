@@ -15,8 +15,8 @@
   ],
   "rewrites": [
     {
-      "source": "/api/cg/:path*",
-      "destination": "/api/cg"
+      "source": "/api/cg/(.*)",
+      "destination": "/api/cg?path=$1"
     }
   ]
 }
