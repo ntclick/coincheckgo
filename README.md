@@ -15,7 +15,7 @@ An AI-powered crypto research platform aggregating trusted market, technical, an
 - ✅ Technical Analysis (Taapi.io): RSI, MACD, EMA, Bollinger Bands, ADX
 - ✅ Fundamentals (CryptoRank): Tokenomics, top investment funds
 - ✅ AI Report (OpenAI): Expert-style, human-readable insights
-- ✅ Live Charts (TradingView): Real-time price charts
+– ✅ Live Charts (Dexscreener): Real-time DEX price charts
 
 **Cost**: 10 GM tokens per research
 
@@ -60,7 +60,7 @@ Enter a token/project name → receive a complete institutional-grade profile.
 - **Blockchain**: Ethereum (Sepolia Testnet)
 - **Privacy**: FHEVM SDK (Fully Homomorphic Encryption)
 - **Smart Contracts**: Solidity (Hardhat)
-- **APIs**: CoinGecko, Taapi.io, CryptoRank, OpenAI, TradingView
+- **APIs**: CoinGecko, Taapi.io, CryptoRank, OpenAI, Dexscreener
 - **Hosting**: Vercel
 
 ---
