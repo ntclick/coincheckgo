@@ -10,13 +10,25 @@ export default async function handler(req: any, res: any) {
     
     // Get path from Vercel dynamic route - path is an array or string
     const path = req.query.path || [];
-    const pathArray = Array.isArray(path) ? path : [path];
-    const pathStr = '/' + pathArray.join('/');
+    const pathArray = Array.isArray(path) ? path : (path ? [path] : []);
     
-    // Get query string from original URL (Vercel already parsed it)
-    const query = req.url?.split('?')[1] || '';
-    const targetPath = pathStr + (query ? '?' + query : '');
+    // Build path string - handle empty case
+    let pathStr = '';
+    if (pathArray.length > 0) {
+      pathStr = '/' + pathArray.join('/');
+    }
     
+    // Get query string from original URL - Vercel provides req.url with full path
+    // Example: req.url = '/api/cg/coins/markets?vs_currency=usd&...'
+    let query = '';
+    if (req.url) {
+      const urlParts = req.url.split('?');
+      if (urlParts.length > 1) {
+        query = '?' + urlParts.slice(1).join('?');
+      }
+    }
+    
+    const targetPath = pathStr + query;
     const targetUrl = apiBase + targetPath;
 
     // Cache key includes method + URL
