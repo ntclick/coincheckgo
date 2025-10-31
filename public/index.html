@@ -50,9 +50,9 @@
     <script>
         // Lightweight boot log only
         // Contract addresses (LATEST deployment - 2025-10-26) - From deployment-hybrid.json
-        const TOKEN_ADDRESS = '0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08';
-        const SWAP_ADDRESS = '0x438A2ce1B563E71b68F2f0EE0575736CccF3231e';
-        const RESEARCH_AI_ADDRESS = '0x0f45E8Fd3BB3ef64D93741bC1F9cf9cB53675aB8'; // 50,000 GM funded
+        const TOKEN_ADDRESS = window.GM_TOKEN_ADDRESS || '0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08';
+        const SWAP_ADDRESS = window.SWAP_ADDRESS || '0x438A2ce1B563E71b68F2f0EE0575736CccF3231e';
+        const RESEARCH_AI_ADDRESS = window.RESEARCH_AI_ADDRESS || '0xBD341699753FEa3305bf16Eaf8228A1F96E945fF';
 
     // Global variables
     let provider, signer, userAddress, fhevm;
@@ -837,12 +837,28 @@
         // Force decrypt confidential balance with EIP-712 signature
         async function forceDecryptConfidentialBalance() {
             console.log('🔐 forceDecryptConfidentialBalance() called');
+            
+            // Check global flag to prevent multiple EIP-712 calls
+            if (window.eip712DecryptionInProgress) {
+                console.log('⏸️ EIP-712 decryption already in progress, skipping...');
+                return;
+            }
+            
+            // Check if already signed recently (within last 60 seconds)
+            if (window.eip712LastSigned && Date.now() - window.eip712LastSigned < 60000) {
+                console.log('⏸️ EIP-712 signed recently, skipping to prevent spam...');
+                return;
+            }
+            
             try {
                 if (!tokenContract || !userAddress) {
                     console.log('❌ Contracts not initialized or wallet not connected');
                     throw new Error('Contracts not initialized or wallet not connected');
                 }
                 console.log('✅ Contracts and wallet are ready');
+                
+                // Set global flag to prevent concurrent calls
+                window.eip712DecryptionInProgress = true;
                 
                 // Set flag to allow decryption
                 window.userRequestedDecryption = true;
@@ -910,6 +926,8 @@
 
                 console.log('✅ EIP-712 signature created for decryption');
                 eip712Signed = true; // Mark as signed to prevent spam
+                window.eip712LastSigned = Date.now(); // Track last signature time
+                window.eip712DecryptionInProgress = false; // Clear progress flag
 
                 // Decrypt the balance using React app's FHEVM instance
                 const result = await fhevmInstance.userDecrypt(
@@ -1038,6 +1056,10 @@
                 return true;
             } catch (error) {
                 console.error('❌ Force decrypt failed:', error.message);
+                // Clear flags on error
+                window.eip712DecryptionInProgress = false;
+                window.userRequestedDecryption = false;
+                window.walletJustConnected = false;
                 return false;
             }
         }
@@ -1221,11 +1243,24 @@
             }
         }, 2000); // Check every 2 seconds
 
-        // Also listen for FHEVM availability from React app (only once)
+        // Also listen for FHEVM availability from React app (only once, with debounce)
+        let fhevmReadyHandled = false;
         window.addEventListener('fhevmReady', () => {
+            if (fhevmReadyHandled) {
+                return; // Already handled
+            }
+            
             console.log('🔔 FHEVM ready event received from React app');
             if (window.retryFHEVMInit && userAddress && !eip712Signed) {
+                // Check if decryption is already in progress or recently signed
+                if (window.eip712DecryptionInProgress || (window.eip712LastSigned && Date.now() - window.eip712LastSigned < 60000)) {
+                    console.log('⏸️ EIP-712 already in progress or signed recently, skipping retry...');
+                    window.retryFHEVMInit = false;
+                    return;
+                }
+                
                 console.log('🔄 Triggering FHEVM retry from event (wallet connected)...');
+                fhevmReadyHandled = true; // Mark as handled
                 window.retryFHEVMInitialization();
                 window.retryFHEVMInit = false; // Stop retrying after first attempt
             } else if (window.retryFHEVMInit && !userAddress) {
@@ -1508,19 +1543,35 @@
         // Check on-chain if user has checked in today
         window.checkDailyCheckInStatus = async function checkDailyCheckInStatus() {
             try {
-                if (!userAddress || !researchAIContract) {
-                    console.log('⚠️ Wallet not connected or contract not initialized');
+                // Get user address from window.ethereum if not set locally
+                let currentUserAddress = userAddress;
+                if (!currentUserAddress && window.ethereum && window.ethereum.selectedAddress) {
+                    currentUserAddress = window.ethereum.selectedAddress;
+                    userAddress = currentUserAddress; // Update local variable
+                }
+                
+                if (!currentUserAddress) {
+                    console.log('⚠️ Wallet not connected');
                     return 'not-checked';
+                }
+                
+                // Use window.researchContract (set by React app) instead of researchAIContract
+                const researchContract = window.researchContract;
+                if (!researchContract) {
+                    console.log('⚠️ Research contract not initialized yet, but allowing check-in attempt');
+                    // Return 'ready' to allow check-in attempt even if contract check fails
+                    // The actual check-in will handle the contract initialization
+                    return 'ready';
                 }
 
                 // Check on-chain if user has checked in today
                 console.log('🔍 Checking on-chain daily check-in status...');
                 try {
-                    const hasCheckedIn = await researchAIContract.hasCheckedInToday(userAddress);
+                    const hasCheckedIn = await researchContract.hasCheckedInToday(currentUserAddress);
                     console.log(`📅 On-chain check-in status: ${hasCheckedIn ? 'Already checked in today' : 'Available'}`);
 
                     // Also check pool balance
-                    const poolBalance = await researchAIContract.getPoolBalance();
+                    const poolBalance = await researchContract.getPoolBalance();
                     const rewardAmount = ethers.utils.parseEther("100"); // 100 GM tokens
                     console.log(`🏊 Pool balance: ${ethers.utils.formatEther(poolBalance)} GM, Required: ${ethers.utils.formatEther(rewardAmount)} GM`);
 
@@ -1622,50 +1673,132 @@
         updateCheckInUIAvailability();
         setInterval(updateCheckInUIAvailability, 30000);
 
-        // Daily Check-in function (NORMAL TRANSACTION - No FHE)
+        // Daily Check-in function: prefer FHE-style endpoint if SDK available
         console.log('🔧 Defining window.dailyCheckIn function...');
+        let isCheckinProcessing = false; // Prevent concurrent calls
         window.dailyCheckIn = async function dailyCheckIn() {
             console.log('🎯 window.dailyCheckIn function called!');
+            
+            // Prevent concurrent calls
+            if (isCheckinProcessing) {
+                console.log('⏳ Daily check-in already in progress, please wait...');
+                throw new Error('Daily check-in is already in progress');
+            }
+            
             try {
+                isCheckinProcessing = true;
+                
+                // Get user address from window.ethereum if not set locally
+                let currentUserAddress = userAddress;
+                if (!currentUserAddress && window.ethereum && window.ethereum.selectedAddress) {
+                    currentUserAddress = window.ethereum.selectedAddress;
+                    userAddress = currentUserAddress; // Update local variable
+                }
+                
+                if (!currentUserAddress) {
+                    throw new Error('Wallet not connected. Please connect your wallet first.');
+                }
+                
                 // Get research contract from window object (set by React app)
-                const researchContract = window.researchContract;
+                let researchContract = window.researchContract;
+                
+                // If contract not available, try to initialize it
+                if (!researchContract && window.ethereum && typeof ethers !== 'undefined') {
+                    console.log('🔧 Research contract not found, attempting to initialize...');
+                    // Support both ethers v5 and v6
+                    let provider, signer;
+                    if (ethers.providers && ethers.providers.Web3Provider) {
+                        // ethers v5
+                        provider = new ethers.providers.Web3Provider(window.ethereum);
+                        signer = provider.getSigner();
+                    } else if (ethers.BrowserProvider) {
+                        // ethers v6
+                        provider = new ethers.BrowserProvider(window.ethereum);
+                        signer = await provider.getSigner();
+                    }
+                    
+                    if (signer) {
+                        researchContract = new ethers.Contract(
+                            window.RESEARCH_AI_ADDRESS || RESEARCH_AI_ADDRESS,
+                            RESEARCH_AI_ABI,
+                            signer
+                        );
+                        window.researchContract = researchContract; // Cache it
+                        console.log('✅ Research contract initialized on-the-fly');
+                    }
+                }
+                
                 if (!researchContract) {
-                    throw new Error('Research contract not initialized');
+                    throw new Error('Research contract not initialized. Please ensure wallet is connected.');
                 }
+                
+                // Helper: Uint8Array -> bytes32
+                const toBytes32 = (arr) => {
+                  const padded = new Uint8Array(32);
+                  padded.set(arr.slice(0, 32));
+                  return '0x' + Array.from(padded).map(b => b.toString(16).padStart(2, '0')).join('');
+                };
 
-                console.log('🔄 Performing normal daily check-in...');
-
-                // Pre-check on-chain status and pool balance
-                console.log('🔍 Pre-checking daily check-in status...');
-                const alreadyChecked = await researchContract.hasCheckedInToday(userAddress);
-                if (alreadyChecked) {
-                    console.log('✅ Already checked in today');
-                    throw new Error('Already checked in today');
-                }
-
-                const poolBalance = await researchContract.getPoolBalance();
-                const reward = ethers.utils.parseEther('100');
-                if (poolBalance < reward) {
-                    console.log('⚠️ Insufficient pool balance');
-                    throw new Error('Insufficient pool balance for daily check-in');
-                }
-
-                console.log('📤 Sending daily check-in transaction...');
-
-                // Send transaction with gas fallback
-                let gasLimit;
+                // Always use public dailyCheckIn - contract handles validation
+                console.log('🔄 Performing daily check-in...');
+                
+                // Pre-check on-chain status (optional - contract will enforce anyway)
                 try {
-                  gasLimit = await researchContract.estimateGas.dailyCheckIn();
-                  console.log('📊 Estimated gas:', gasLimit.toString());
-                } catch (estimateError) {
-                  console.warn('⚠️ Gas estimation failed, using fallback:', estimateError.message);
-                  gasLimit = 300000n; // Safe fallback for Sepolia
+                  const alreadyChecked = await researchContract.hasCheckedInToday(currentUserAddress);
+                  if (alreadyChecked) {
+                    console.log('⚠️ Already checked in today (on-chain check)');
+                    throw new Error('Already checked in today');
+                  }
+                } catch (preCheckError) {
+                  // If pre-check fails, let contract handle it
+                  if (preCheckError.message && preCheckError.message.includes('already')) {
+                    throw preCheckError;
+                  }
+                  console.log('⚠️ Pre-check failed, proceeding anyway - contract will validate');
                 }
 
+                // Check pool balance (optional - contract will enforce anyway)
+                try {
+                  const poolBalance = await researchContract.getPoolBalance();
+                  let reward;
+                  if (typeof ethers !== 'undefined') {
+                    if (ethers.utils && ethers.utils.parseEther) {
+                      reward = ethers.utils.parseEther('100');
+                    } else if (ethers.parseEther) {
+                      reward = ethers.parseEther('100');
+                    }
+                  }
+                  if (reward && poolBalance < reward) {
+                    console.log('⚠️ Insufficient pool balance detected');
+                    throw new Error('Insufficient pool balance for daily check-in');
+                  }
+                } catch (poolCheckError) {
+                  if (poolCheckError.message && poolCheckError.message.includes('Insufficient')) {
+                    throw poolCheckError;
+                  }
+                  console.log('⚠️ Pool check failed, proceeding anyway - contract will validate');
+                }
+
+                // Send transaction - contract will validate and reject if needed
+                let gasLimit;
+                try { 
+                  gasLimit = await researchContract.estimateGas.dailyCheckIn();
+                } catch (estimateError) {
+                  console.log('⚠️ Gas estimation failed, using default:', estimateError.message);
+                  gasLimit = 300000n; 
+                }
+                
                 const checkInTx = await researchContract.dailyCheckIn({ gasLimit });
                 console.log(`📤 Check-in transaction sent: ${checkInTx.hash}`);
-
+                
+                // Wait for confirmation
                 const receipt = await checkInTx.wait();
+                
+                // Check if transaction succeeded
+                if (receipt.status === 0) {
+                  throw new Error('Transaction reverted - you may have already checked in today or pool balance is insufficient');
+                }
+                
                 console.log(`✅ Daily check-in successful! Gas used: ${receipt.gasUsed.toString()}`);
 
                 console.log('🎉 You received 100 GM tokens!');
@@ -1673,45 +1806,82 @@
                     detail: { type: 'dailyCheckIn', amount: '100' }
                 }));
 
-                // Update UI
-                await loadTokenBalances();
+                // Update balance silently (no page reload)
+                try {
+                    await loadTokenBalances();
+                } catch (e) {
+                    console.log('⚠️ Balance update failed, but check-in succeeded');
+                }
                 return true;
             } catch (error) {
                 console.error(`❌ Daily check-in failed: ${error.message}`);
                 throw error;
+            } finally {
+                isCheckinProcessing = false;
             }
         };
 
-        // AI Research function
+        // AI Research function: prefer FHE-style endpoint if SDK available
         window.performAIResearch = async function performAIResearch(topic = "crypto market analysis") {
             try {
-                if (!researchAIContract || !tokenContract) {
+                // Use window.researchContract (set by React app) instead of researchAIContract
+                const researchContract = window.researchContract;
+                if (!researchContract || !tokenContract) {
                     throw new Error('Contracts not initialized');
                 }
                 
                 console.log(`🔬 Performing AI research on: ${topic}`);
                 
                 // Fixed research cost (10 GM)
-                const researchCost = ethers.utils.parseEther("10");
-                console.log(`💰 Research cost: ${ethers.utils.formatEther(researchCost)} GM`);
+                // Use ethers.utils.parseEther for ethers v5, or check if v6
+                let researchCost;
+                if (typeof ethers !== 'undefined') {
+                  if (ethers.utils && ethers.utils.parseEther) {
+                    researchCost = ethers.utils.parseEther("10");
+                  } else if (ethers.parseEther) {
+                    researchCost = ethers.parseEther("10");
+                  }
+                }
+                if (!researchCost) {
+                  throw new Error('Failed to parse research cost - ethers library not available');
+                }
+                const formatEther = (ethers.utils && ethers.utils.formatEther) || ethers.formatEther || ((val) => val.toString());
+                console.log(`💰 Research cost: ${formatEther(researchCost)} GM`);
                 
                 // Check user balance
                 const userBalance = await tokenContract.balanceOf(userAddress);
-                console.log(`💰 User GM balance: ${ethers.utils.formatEther(userBalance)} GM`);
+                console.log(`💰 User GM balance: ${formatEther(userBalance)} GM`);
                 
                 if (userBalance.lt(researchCost)) {
-                    throw new Error(`Insufficient GM balance. You have ${ethers.utils.formatEther(userBalance)} GM, need ${ethers.utils.formatEther(researchCost)} GM`);
+                    throw new Error(`Insufficient GM balance. You have ${formatEther(userBalance)} GM, need ${formatEther(researchCost)} GM`);
                 }
+                
+                // Get research contract address from the contract itself or window
+                const researchContractAddress = window.RESEARCH_AI_ADDRESS || RESEARCH_AI_ADDRESS;
                 
                 // Approve research contract to spend GM tokens
                 console.log('🔑 Approving research contract to spend GM tokens...');
-                const approveTx = await tokenContract.approve(RESEARCH_AI_ADDRESS, researchCost);
+                const approveTx = await tokenContract.approve(researchContractAddress, researchCost);
                 await approveTx.wait();
                 console.log('✅ Approval successful');
                 
-                // Perform research
-                console.log('🔬 Executing AI research...');
-                const researchTx = await researchAIContract.performAIResearch(topic);
+                let researchTx;
+                if (window.fhevm && researchContract.performAIResearchFHE) {
+                  console.log('🔬 Executing AI research (FHE-style)...');
+                  // Build encrypted cost handle/proof for forward compatibility
+                  const buffer = window.fhevm.createEncryptedInput(researchContractAddress, userAddress);
+                  buffer.add64(BigInt(10));
+                  const { handles, inputProof } = await buffer.encrypt();
+                  const toBytes32 = (arr) => '0x' + Array.from(arr.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join('');
+                  const handleBytes32 = toBytes32(handles[0]);
+                  let gasLimit;
+                  try { gasLimit = await researchContract.estimateGas.performAIResearchFHE(topic, researchCost, handleBytes32, inputProof); }
+                  catch (_) { gasLimit = 400000n; }
+                  researchTx = await researchContract.performAIResearchFHE(topic, researchCost, handleBytes32, inputProof, { gasLimit });
+                } else {
+                  console.log('🔬 Executing AI research (public fallback)...');
+                  researchTx = await researchContract.performAIResearch(topic);
+                }
                 console.log(`📤 Research transaction sent: ${researchTx.hash}`);
                 
                 const receipt = await researchTx.wait();

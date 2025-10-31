@@ -274,29 +274,38 @@ export const initializeFHEVM = async (provider: BrowserProvider, signer?: any): 
 };
 
 /**
- * Get FHEVM instance
+ * Get FHEVM instance - tries window.fhevm first, then module instance
  */
 export const getFHEVMInstance = () => {
-  if (!isSDKInitialized || !fhevmInstance) {
-    throw new Error('FHEVM not initialized. Call initializeFHEVM() first.');
+  // Priority 1: Check window.fhevm (set by React app initialization)
+  if ((window as any).fhevm && typeof (window as any).fhevm.createEncryptedInput === 'function') {
+    console.log('✅ Using FHEVM instance from window.fhevm');
+    return (window as any).fhevm;
   }
   
-  // Ensure ACL methods are always available
-  if (!fhevmInstance.allow) {
-    fhevmInstance.allow = async (contractAddress: string) => {
-      console.log(`🔐 allow() called for contract ${contractAddress}`);
-      return true;
-    };
+  // Priority 2: Check module instance (if initialized)
+  if (isSDKInitialized && fhevmInstance) {
+    console.log('✅ Using FHEVM instance from module');
+    
+    // Ensure ACL methods are always available
+    if (!fhevmInstance.allow) {
+      fhevmInstance.allow = async (contractAddress: string) => {
+        console.log(`🔐 allow() called for contract ${contractAddress}`);
+        return true;
+      };
+    }
+    
+    if (!fhevmInstance.allowTransient) {
+      fhevmInstance.allowTransient = async (handle: string, userAddress: string) => {
+        console.log(`🔐 allowTransient() called for handle ${handle.substring(0, 10)}..., user ${userAddress}`);
+        return true;
+      };
+    }
+    
+    return fhevmInstance;
   }
   
-  if (!fhevmInstance.allowTransient) {
-    fhevmInstance.allowTransient = async (handle: string, userAddress: string) => {
-      console.log(`🔐 allowTransient() called for handle ${handle.substring(0, 10)}..., user ${userAddress}`);
-      return true;
-    };
-  }
-  
-  return fhevmInstance;
+  throw new Error('FHEVM not initialized. Call initializeFHEVM() first or ensure window.fhevm is available.');
 };
 
 /**

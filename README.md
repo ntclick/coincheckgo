@@ -1,112 +1,153 @@
-## CoinCheckGo dApp (FHE Hybrid) – Architecture, Logic, and Roadmap
+# 🔮 CoinCheckGo - AI Crypto Research Platform
 
-### 1) Overview
-- **Goal**: Hybrid decentralized app for ETH ↔ GM swaps, Daily Check-in rewards, and AI-powered crypto research.
-- **Networks**: Sepolia.
-- **Privacy**: Hybrid model — public ETH→GM; confidential GM→ETH (FHEVM-compatible path), with pragmatic public fallbacks.
+Nền tảng nghiên cứu cryptocurrency với AI, tích hợp dữ liệu từ nhiều nguồn uy tín. Sử dụng **Fully Homomorphic Encryption (FHE)** để bảo vệ quyền riêng tư.
 
-### 2) Core Architecture
-- **Frontend**: React (TypeScript) under `src/` with a thin injected script in `public/index.html` for wallet + FHEVM bootstrap.
-- **Contracts** (addresses are configured in code):
-  - `GMCleanTokenHybrid` (GM token; hybrid public+confidential balance helpers)
-  - `GMERC7984SwapHybrid` (swap / pool management with fixed-rate paths and AMM helpers)
-  - `GMResearchAI_V2_Final` (Daily Check‑in + AI Research costing)
-- **Services**:
-  - `cryptoApiService` (CoinGecko markets, search)
-  - `taapiService` (technical indicators, bulk API)
-  - `cryptoCompareService` (social sentiment)
-  - `aiReportService` (OpenAI orchestration; recommend server proxy)
-- **State Sharing**: `useCoinCheckGoFHE_Simple` exposes a minimal global state bridge to avoid React Strict Mode multi‑instance drift.
+🌐 **Website**: [coincheckgo.com](http://coincheckgo.com/) | 🚀 **Demo**: [coincheckgofhe.vercel.app](https://coincheckgofhe.vercel.app/) | 👤 **Author**: [@trungkts29](https://x.com/trungkts29)
 
-### 3) Wallet, Network, and FHEVM
-- **Wallet Connect**: MetaMask via `ethers` in `public/index.html` and `useCoinCheckGoFHE_Simple`.
-- **Network**: Auto‑prompt switch to Sepolia on connect.
-- **EIP‑712 Decryption**:
-  - Triggered once post‑connect; debounced to avoid spam.
-  - Confidential balance parsed safely (BigInt, nested object handling) and displayed.
-- **COOP/COEP Headers**: `server.js` and `vercel.json` ensure threads/WebAssembly are available for FHEVM SDK.
+---
 
-### 4) Token Balances and Pool
-- Token balances loaded from wallet; confidential balance decrypted after EIP‑712.
-- Pool status shown via swap contract (public reserves). Regular users can view pool.
-- Initialize pool with ETH + GM. Owner can add liquidity; APR logic is planned on‑chain.
+## ✨ Chức năng chính
 
-### 5) Swaps
-- **ETH → GM (Public)**:
-  - Fixed rate baseline: 0.001 ETH = 100 GM (1 ETH = 100,000 GM) minus fee.
-  - UI shows rate with fee and direction toggle.
-- **GM → ETH (Confidential target)**:
-  - UX path exists; on‑chain FHE path is stubbed with hybrid/public fallback to ensure execution reliability.
-  - Approval flow fixed to use user input (not unlimited cap).
+### 🤖 AI Research Tool
+**Chỉ cần nhập tên token → Nhận báo cáo đầy đủ**
 
-### 6) Daily Check‑in
-- Contract: `GMResearchAI_V2_Final.dailyCheckIn()` rewards 100 GM/day.
-- Reset: 00:00 UTC (07:00 UTC+7). Countdown and availability handled in UI.
-- After tx mined, one decryption trigger updates confidential balance; debounce prevents multiple prompts.
+- ✅ Market data (CoinGecko): Giá, volume, market cap, 24h high/low
+- ✅ Technical Analysis (Taapi.io): RSI, MACD, EMA, Bollinger Bands, ADX
+- ✅ Fundamentals (CryptoRank): Tokenomics, investment funds
+- ✅ AI Report (OpenAI): Báo cáo phân tích chuyên sâu với insights
+- ✅ Live Charts (TradingView): Biểu đồ giá real-time
 
-### 7) AI Crypto Research Tool
-- Flow: On‑chain cost (10 GM) → wait for confirmation → pull real data → generate AI report.
-- Data sources:
-  - Market: CoinGecko (`cryptoApiService` with multi‑page + API key fallback)
-  - Technicals: Taapi.io (`taapiService` with bulk indicators; mock fallback behind `REACT_APP_ALLOW_MOCK`)
-  - Sentiment: CryptoCompare (`cryptoCompareService`)
-  - AI Report: OpenAI via `aiReportService` (recommend backend proxy for key security)
-- UI: Wider layout, TradingView chart, market/TA/sentiment cards, AI summary and verdict.
-- Suggestions: Top 300 coins (local JSON fallback `src/data/top_coins.json` + remote search merge).
+**Cost**: 10 GM tokens per research
 
-### 8) Files You’ll Touch Most
-- `public/index.html` – Wallet + FHEVM bootstrap, contract ABIs/addresses, balance decrypt, check‑in availability bridge.
-- `src/hooks/useCoinCheckGoFHE_Simple.ts` – Wallet state, contracts, check‑in/research calls, global state bridge.
-- `src/components/CompleteDashboard.tsx` – Main dashboard, countdown timer, page routing.
-- `src/components/AIResearchTool.tsx` – Research workflow, data fetch, AI report rendering.
-- `src/services/*` – API integrations and caching.
+### 💰 Token System
+- **GM Token**: Native token của nền tảng
+- **ETH ↔ GM Swap**: Swap ETH sang GM và ngược lại
+- **FHE Encryption**: Số dư token được mã hóa hoàn toàn
+- **Auto Approval**: Approve 100 GM một lần, dùng cho 10 research
 
-### 9) Deployment
-- **Local**: `node server.js` (serves React dev with headers) + `npm start` inside the React app if needed.
-- **Vercel**: Root set to `fhevm-react-template/coincheckgogithub`. `vercel.json` applies COOP/COEP headers.
+### 📊 Market Dashboard
+- Top 300 cryptocurrencies
+- Market capitalization (20 items/page)
+- Top gainers/losers (5 items each)
+- News feed từ CoinDesk, Decrypt, CoinTelegraph
 
-### 10) Environment
-- Frontend reads `REACT_APP_*` variables. Keys needed:
-  - `REACT_APP_TAAPI_API_KEY`
-  - `REACT_APP_CRYPTOCOMPARE_API_KEY`
-  - `REACT_APP_COINCHECKGO_API_KEY` (CoinGecko demo key optional)
-  - `REACT_APP_ALLOW_MOCK=true|false` (fallbacks for missing keys)
-- OpenAI key should NOT be exposed in frontend. Use a backend proxy route.
+---
 
-### 11) Known Safeguards and Fixes
-- Prevent EIP‑712 spamming; single decrypt trigger after important tx (check‑in/research).
-- Balance parsing tolerates BigInt and various gateway result shapes.
-- Approval amounts match user input (avoid huge spending caps).
-- Strict Mode multi‑instance fixed via global shared state and listeners.
+## 🚀 Roadmap - Phát triển tương lai
 
-### 12) Roadmap – Next Upgrades for Deeper Research
-- **Privacy & Swap**
-  - Full confidential GM→ETH with on‑chain FHE arithmetic (remove public fallback)
-  - Pool reward logic (10% APR) with claim/withdraw; per‑provider accounting
-  - Robust operator permissions and ACL checks for FHE handles
-- **Research Depth**
-  - Multi‑timeframe TA (15m/1h/4h/1d) with consensus signals
-  - On‑chain analytics: DEX volume, holders, whale flows (Etherscan/Chain APIs)
-  - News intelligence: CoinDesk/Decrypt/CoinTelegraph RSS merged, dedup, entity extraction
-  - Social sentiment enrichment (Twitter/Reddit via CryptoCompare extensions)
-  - Smart prompts with retrieval‑augmented generation (RAG) over fetched data
-  - Risk scoring model blending TA/FA/sentiment/liquidity/volatility
-- **Performance & UX**
-  - Caching layer (Redis/Edge KV) for API responses and AI summaries
-  - Pre‑fetching and background refresh for top coins
-  - Accessible, responsive cards with skeleton loaders and error boundaries
-- **Reliability & Ops**
-  - Backend proxy services for OpenAI/Crypto APIs with rate‑limit handling
-  - Observability: structured logs for swaps, check‑ins, research sessions
-  - Test coverage for hooks/services; CI checks
+### 🎯 Vision: One-Click Comprehensive Research
 
-### 13) Maintenance Checklist
-- Verify contract addresses in `public/index.html` and `useCoinCheckGoFHE_Simple.ts` match deployments.
-- Ensure COOP/COEP headers active in hosting environment.
-- Keep API keys fresh; set `REACT_APP_ALLOW_MOCK=false` for production.
-- Monitor MetaMask network auto‑switch and EIP‑712 prompts on first load.
+Chỉ cần nhập tên token/dự án → Nhận đầy đủ thông tin đầu tư:
 
-—
-For deployment steps and environment setup, see package scripts and `server.js`. For questions, check `src/services/*` and hook files first.
+#### Dữ liệu sẽ tích hợp:
+- **DeFiLlama**: TVL, protocol metrics, DeFi rankings
+- **Messari**: Research reports, analytics, metrics
+- **Token Unlock**: Unlock schedules, vesting info, distribution timeline
+- **Social Signals**: Twitter sentiment, Reddit activity, Discord metrics, GitHub activity
 
+#### Thông tin sẽ hiển thị:
+- 📈 **Investment Info**: Top funds đã đầu tư, funding rounds, valuations
+- 📅 **Unlock Schedule**: Lịch unlock chi tiết, vesting, token distribution
+- 💎 **Tokenomics**: Supply breakdown, distribution, staking rewards
+- 📰 **News & Updates**: Tin tức từ nhiều nguồn, social sentiment
+- 📊 **Research Reports**: AI-generated reports với technical & fundamental analysis
+- 💹 **Market Data**: Real-time price, volume, market cap tracking
 
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend**: React + TypeScript
+- **Blockchain**: Ethereum (Sepolia Testnet)
+- **Privacy**: FHEVM SDK (Fully Homomorphic Encryption)
+- **Smart Contracts**: Solidity (Hardhat)
+- **APIs**: CoinGecko, Taapi.io, CryptoRank, OpenAI, TradingView
+- **Deploy**: Vercel
+
+---
+
+## 📦 Quick Start
+
+### 1. Install
+```bash
+npm install
+```
+
+### 2. Setup `.env`
+```env
+REACT_APP_SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/YOUR_KEY
+
+REACT_APP_GM_TOKEN_ADDRESS=0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08
+REACT_APP_SWAP_ADDRESS=0x438A2ce1B563E71b68F2f0EE0575736CccF3231e
+REACT_APP_RESEARCH_AI_ADDRESS=0xBD341699753FEa3305bf16Eaf8228A1F96E945fF
+
+REACT_APP_FHEVM_RELAYER_URL=https://relayer.sepolia.fhevm.xyz
+REACT_APP_FHEVM_CHAIN_ID=11155111
+
+REACT_APP_OPENAI_API_KEY=your_key
+REACT_APP_OPENAI_MODEL=gpt-4
+REACT_APP_CRYPTORANK_API_KEY=your_key
+REACT_APP_TAAPI_API_KEY=your_key
+```
+
+### 3. Run
+```bash
+npm start
+```
+
+---
+
+## 📋 Smart Contracts
+
+| Contract | Address | Function |
+|----------|---------|----------|
+| GM Token | `0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08` | ERC20 + FHE encryption |
+| Swap | `0x438A2ce1B563E71b68F2f0EE0575736CccF3231e` | ETH ↔ GM swap |
+| Research AI | `0xBD341699753FEa3305bf16Eaf8228A1F96E945fF` | AI research với FHE |
+
+---
+
+## 🔐 Privacy Features
+
+- **FHE Encryption**: Token balances được mã hóa hoàn toàn
+- **EIP-712 Signatures**: Xác thực an toàn cho giải mã
+- **On-chain Validation**: Tất cả validation trên blockchain
+- **No Data Storage**: Không lưu dữ liệu nhạy cảm trên server
+
+---
+
+## 📂 Project Structure
+
+```
+src/
+├── components/
+│   ├── CompleteDashboard.tsx    # Main dashboard
+│   └── AIResearchTool.tsx       # AI research tool
+├── hooks/
+│   └── useCoinCheckGoFHE_Simple.ts  # Wallet & contracts
+├── services/
+│   ├── cryptoApiService.ts      # CoinGecko API
+│   ├── taapiService.ts          # Technical analysis
+│   ├── cryptoRankService.ts     # Fundamentals
+│   └── aiReportService.ts       # OpenAI reports
+└── utils/
+    └── fhevm.ts                 # FHEVM initialization
+```
+
+---
+
+## 🌐 Links
+
+- **Production**: [coincheckgo.com](http://coincheckgo.com/) *(Coming soon)*
+- **Demo**: [coincheckgofhe.vercel.app](https://coincheckgofhe.vercel.app/)
+- **Author**: [@trungkts29](https://x.com/trungkts29)
+
+---
+
+## 📄 License
+
+MIT License
+
+---
+
+**Note**: Hiện tại chạy trên Sepolia Testnet. Cần Sepolia ETH và MetaMask để sử dụng.

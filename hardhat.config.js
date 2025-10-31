@@ -1,17 +1,23 @@
-import "@nomicfoundation/hardhat-toolbox";
 import dotenv from "dotenv";
 dotenv.config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 export default {
   solidity: {
-    version: "0.8.24",
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200
+    compilers: [
+      {
+        version: "0.8.27",
+        settings: {
+          optimizer: { enabled: true, runs: 200 }
+        }
+      },
+      {
+        version: "0.8.24",
+        settings: {
+          optimizer: { enabled: true, runs: 200 }
+        }
       }
-    }
+    ]
   },
   networks: {
     hardhat: {
@@ -24,7 +30,7 @@ export default {
     }
   },
   paths: {
-    sources: "./contracts",
+    sources: "./contracts_deploy",
     tests: "./test",
     cache: "./cache",
     artifacts: "./artifacts"

@@ -73,6 +73,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
   const [isLoadingCryptos, setIsLoadingCryptos] = useState(false);
   const [showFunds, setShowFunds] = useState(false);
   const [fundsList, setFundsList] = useState<any[]>([]);
+  const [showGeneratingPopup, setShowGeneratingPopup] = useState(false);
 
   // Safe number formatter
   const fmt = (value: any, decimals: number = 2) => {
@@ -139,8 +140,9 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
     // console.log('🔍 Crypto selected:', crypto.symbol);
   };
 
-  // Disable button when: no coin selected, not connected, or researching
-  const buttonDisabled = !isConnected || !coinSymbol || isResearching;
+  // Disable button when: no coin selected, not connected, or researching/processing
+  // Also disable when researchProgress is active (includes "đang gen content" phase)
+  const buttonDisabled = !isConnected || !coinSymbol || isResearching || !!researchProgress;
 
   // AI Research function - NORMAL TRANSACTION WITH ONCHAIN CHECK
   const handleResearch = async () => {
@@ -173,43 +175,88 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
       }
 
       console.log('✅ Research transaction confirmed on-chain:', tx.hash);
-      setResearchProgress('On-chain transaction confirmed - proceeding with analysis...');
+      setResearchProgress('✅ Transaction confirmed - Đang tiếp tục xử lý...');
 
       // Now proceed with API data fetching (only after successful on-chain transaction)
-      setResearchProgress('Fetching market data from CoinGecko...');
-      const marketData = await cryptoApiService.getCryptoDetails(selectedCrypto!.id);
-      await new Promise(r => setTimeout(r, 400));
-      setSelectedCrypto(marketData);
+      // This is the main processing phase - DO NOT reload page here
+      try {
+        setResearchProgress('📊 Fetching market data from CoinGecko...');
+        const marketData = await cryptoApiService.getCryptoDetails(selectedCrypto!.id);
+        await new Promise(r => setTimeout(r, 400));
+        setSelectedCrypto(marketData);
+        console.log('✅ Market data fetched');
 
-      setResearchProgress('Analyzing technical indicators with Taapi.io...');
-      const technical = await taapiService.getTechnicalAnalysis(coinSymbol.toLowerCase());
-      await new Promise(r => setTimeout(r, 400));
-      setTechnicalData(technical);
+        setResearchProgress('📈 Analyzing technical indicators with Taapi.io...');
+        // Pass current price from CoinGecko to validate and calculate technical indicators correctly
+        const currentPrice = marketData?.current_price || selectedCrypto?.current_price;
+        const technical = await taapiService.getTechnicalAnalysis(coinSymbol.toLowerCase(), '1h', currentPrice);
+        await new Promise(r => setTimeout(r, 400));
+        setTechnicalData(technical);
+        console.log('✅ Technical analysis completed', { currentPrice, technical });
 
-      setResearchProgress('Fetching fundamentals from CryptoRank...');
-      const fundamentals = await cryptoRankService.getFundamentals(coinSymbol.toLowerCase());
-      await new Promise(r => setTimeout(r, 400));
-      setFundamentalsData(fundamentals);
+        setResearchProgress('📊 Fetching fundamentals from CryptoRank...');
+        const fundamentals = await cryptoRankService.getFundamentals(coinSymbol.toLowerCase());
+        await new Promise(r => setTimeout(r, 400));
+        setFundamentalsData(fundamentals);
+        console.log('✅ Fundamentals data fetched');
 
-      let funds = [];
-      if (showFunds) {
-        funds = await getTopFunds(coinSymbol.toLowerCase());
-        setFundsList(funds);
+        // Always fetch funds data (no checkbox needed)
+        setResearchProgress('💰 Fetching investment funds data...');
+        let funds = [];
+        try {
+          funds = await getTopFunds(coinSymbol.toLowerCase());
+          setFundsList(funds);
+          console.log('✅ Funds data fetched:', funds.length);
+        } catch (fundError) {
+          console.warn('⚠️ Failed to fetch funds:', fundError);
+          setFundsList([]); // Set empty if fails
+        }
+
+        setResearchProgress('🤖 Generating AI report with OpenAI...');
+        setShowGeneratingPopup(true); // Show popup when generating
+        const aiReport = await aiReportService.generateReport(
+          coinSymbol,
+          marketData,
+          technical,
+          fundamentals
+        );
+        setResearchData(aiReport);
+        setShowGeneratingPopup(false); // Close popup when done
+        setResearchProgress('✅ Research completed successfully!');
+        console.log('✅ AI Report generated');
+        
+        // All processing completed - results are now displayed on the page
+        // No page reload needed - user can see results immediately
+        console.log('✅ All processing completed - results displayed on page');
+        
+        // Refresh balance silently (no page reload)
+        setTimeout(() => {
+          if ((window as any).loadTokenBalances) {
+            (window as any).loadTokenBalances();
+          }
+        }, 2000);
+      } catch (apiError: any) {
+        // If API processing fails, show error on page (no reload)
+        console.error('❌ API processing failed:', apiError);
+        setResearchError(`API processing failed: ${apiError.message || apiError}`);
+        setResearchProgress('');
+        // Don't reload - let user see the error and try again if needed
       }
-
-      setResearchProgress('Generating AI report with OpenAI...');
-      const aiReport = await aiReportService.generateReport(
-        coinSymbol,
-        marketData,
-        technical,
-        fundamentals
-      );
-      setResearchData(aiReport);
-      setResearchProgress('✅ Research completed successfully!');
     } catch (error: any) {
       console.error('Research failed:', error);
+      
+      // Check if error is from transaction (before API processing)
+      if (error.message?.includes('transaction') || error.message?.includes('Transaction') || error.message?.includes('User rejected')) {
+        setResearchError(`Transaction failed: ${error.message || error}`);
+        setResearchProgress('');
+        // Don't reload on transaction failure - let user see the error
+        return;
+      }
+      
+      // For other errors (shouldn't happen if transaction succeeded)
       setResearchError(`Research failed: ${error.message || error}`);
       setResearchProgress('');
+      // Don't reload - let user see the error and try again if needed
     }
     // Note: Don't set setIsResearching(false) here - it's handled in the hook
   };
@@ -249,6 +296,51 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
 
   return (
     <>
+      {/* Generating AI Report Popup Modal */}
+      {showGeneratingPopup && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0, 0, 0, 0.8)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.15) 0%, rgba(157, 78, 221, 0.15) 100%)',
+            border: '1px solid rgba(0, 212, 255, 0.3)',
+            borderRadius: '20px',
+            padding: '40px',
+            maxWidth: '400px',
+            width: '90%',
+            textAlign: 'center',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)'
+          }}>
+            <div style={{
+              fontSize: '64px',
+              marginBottom: '20px',
+              animation: 'spin 2s linear infinite'
+            }}>🤖</div>
+            <h3 style={{
+              color: 'rgb(0, 212, 255)',
+              fontSize: '24px',
+              fontWeight: 'bold',
+              marginBottom: '12px',
+              margin: '0 0 12px 0'
+            }}>Generating AI Report...</h3>
+            <p style={{
+              color: 'rgba(255, 255, 255, 0.8)',
+              fontSize: '14px',
+              margin: '0'
+            }}>Đang tạo báo cáo phân tích chi tiết...</p>
+          </div>
+        </div>
+      )}
     <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px', minHeight: '100vh' }}>
       {/* Page Header */}
       <div style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -306,16 +398,7 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
             />
           </div>
           <button
-            onClick={() => {
-              // console.log('🔍 Button clicked!', {
-              //   isResearching,
-              //   isConnected: isWalletConnected(),
-              //   coinSymbol,
-              //   hasEnoughTokens: hasEnoughTokens(),
-              //   userPublicBalance
-              // });
-              handleResearch();
-            }}
+            onClick={handleResearch}
             disabled={buttonDisabled}
             style={{
               background: buttonDisabled
@@ -335,7 +418,9 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               whiteSpace: 'nowrap'
             }}
           >
-{isResearching ? '⏳ Processing...' : `🔮 Research (${getTokenCost()} GM)`}
+            {isResearching ? '⏳ Processing...' : 
+             researchProgress ? `⏳ ${researchProgress}` :
+             `🔮 Research (${getTokenCost()} GM)`}
           </button>
         </div>
         
@@ -565,7 +650,143 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
                     Market Cap
                   </div>
                   <div style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>
-                    ${selectedCrypto.market_cap.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    ${selectedCrypto.market_cap >= 1e9 ? fmt(selectedCrypto.market_cap / 1e9, 2) + 'B' : fmt(selectedCrypto.market_cap / 1e6, 2) + 'M'}
+                  </div>
+                  {selectedCrypto.market_cap_rank && (
+                    <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '12px' }}>
+                      Rank #{selectedCrypto.market_cap_rank}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {/* 24h High Card */}
+              {selectedCrypto?.high_24h ? (
+                <div style={{ 
+                  background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))', 
+                  borderRadius: '12px', 
+                  padding: '20px', 
+                  border: '1px solid rgba(0, 255, 136, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(0, 255, 136, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    24h High
+                  </div>
+                  <div style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    ${fmt(selectedCrypto.high_24h, 2)}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* 24h Low Card */}
+              {selectedCrypto?.low_24h ? (
+                <div style={{ 
+                  background: 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))', 
+                  borderRadius: '12px', 
+                  padding: '20px', 
+                  border: '1px solid rgba(255, 68, 68, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(255, 68, 68, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    24h Low
+                  </div>
+                  <div style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    ${fmt(selectedCrypto.low_24h, 2)}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Circulating Supply Card */}
+              {selectedCrypto?.circulating_supply ? (
+                <div style={{ 
+                  background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.05))', 
+                  borderRadius: '12px', 
+                  padding: '20px', 
+                  border: '1px solid rgba(0, 212, 255, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: 'rgba(0, 212, 255, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    Circulating Supply
+                  </div>
+                  <div style={{ color: 'white', fontSize: '24px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    {selectedCrypto.circulating_supply >= 1e9 ? fmt(selectedCrypto.circulating_supply / 1e9, 2) + 'B' :
+                     selectedCrypto.circulating_supply >= 1e6 ? fmt(selectedCrypto.circulating_supply / 1e6, 2) + 'M' :
+                     selectedCrypto.circulating_supply >= 1e3 ? fmt(selectedCrypto.circulating_supply / 1e3, 2) + 'K' :
+                     fmt(selectedCrypto.circulating_supply, 0)}
+                  </div>
+                  {selectedCrypto.total_supply && selectedCrypto.circulating_supply && (
+                    <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '12px' }}>
+                      {fmt((selectedCrypto.circulating_supply / selectedCrypto.total_supply) * 100, 1)}% of total
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {/* Market Cap Change 24h Card */}
+              {selectedCrypto?.market_cap_change_percentage_24h !== undefined ? (
+                <div style={{ 
+                  background: (selectedCrypto.market_cap_change_percentage_24h || 0) >= 0 
+                    ? 'linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.05))' 
+                    : 'linear-gradient(135deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.05))', 
+                  borderRadius: '12px', 
+                  padding: '20px', 
+                  border: `1px solid ${(selectedCrypto.market_cap_change_percentage_24h || 0) >= 0 ? 'rgba(0, 255, 136, 0.3)' : 'rgba(255, 68, 68, 0.3)'}`,
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    right: '-10px', 
+                    width: '40px', 
+                    height: '40px', 
+                    background: (selectedCrypto.market_cap_change_percentage_24h || 0) >= 0 ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 68, 68, 0.1)', 
+                    borderRadius: '50%' 
+                  }} />
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>
+                    Market Cap Change (24h)
+                  </div>
+                  <div style={{ 
+                    color: (selectedCrypto.market_cap_change_percentage_24h || 0) >= 0 ? '#00ff88' : '#ff4444', 
+                    fontSize: '24px', 
+                    fontWeight: 'bold',
+                    marginBottom: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    {(selectedCrypto.market_cap_change_percentage_24h || 0) >= 0 ? '↗️' : '↘️'}
+                    {fmt(selectedCrypto.market_cap_change_percentage_24h, 2)}%
                   </div>
                 </div>
               ) : null}
@@ -796,14 +1017,14 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
                     fontSize: '12px',
                     fontWeight: '500'
                   }}>
-                    EMA 50: ${fmt(technicalData.ema.ema_50,2) || 'N/A'}
+                    EMA 50: {technicalData.ema.ema_50 > 0 ? `$${fmt(technicalData.ema.ema_50,2)}` : 'N/A'}
                   </div>
                   <div style={{ 
                     marginTop: '4px',
                     fontSize: '10px',
                     color: 'rgba(255, 255, 255, 0.5)'
                   }}>
-                    EMA 200: ${fmt(technicalData.ema.ema_200,2) || 'N/A'}
+                    EMA 200: {technicalData.ema.ema_200 > 0 ? `$${fmt(technicalData.ema.ema_200,2)}` : 'N/A'}
                   </div>
                 </div>
               ) : null}
@@ -843,14 +1064,14 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
                     fontSize: '12px',
                     fontWeight: '500'
                   }}>
-                    Upper: ${fmt(technicalData.bollinger_bands.upper,2) || 'N/A'}
+                    Upper: {technicalData.bollinger_bands.upper > 0 ? `$${fmt(technicalData.bollinger_bands.upper,2)}` : 'N/A'}
                   </div>
                   <div style={{ 
                     marginTop: '4px',
                     fontSize: '10px',
                     color: 'rgba(255, 255, 255, 0.5)'
                   }}>
-                    Lower: ${fmt(technicalData.bollinger_bands.lower,2) || 'N/A'}
+                    Lower: {technicalData.bollinger_bands.lower > 0 ? `$${fmt(technicalData.bollinger_bands.lower,2)}` : 'N/A'}
                   </div>
                 </div>
               ) : null}
@@ -906,64 +1127,21 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
             </div>
           </div>
 
-          {/* Fundamentals */}
-          <div className="glass-card" style={{ marginBottom: '24px', padding: '20px' }}>
-            <h3 style={{ color: 'rgb(0, 212, 255)', marginBottom: '16px', fontSize: '18px' }}>🏗️ Fundamentals</h3>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '16px'
-            }}>
-              {selectedCrypto?.market_cap ? (
-                <div style={{
-                  background: 'rgba(0, 0, 0, 0.2)',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  border: '1px solid rgba(0, 212, 255, 0.2)',
-                  minHeight: '60px'
-                }}>
-                  <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '12px' }}>TVL</div>
-                  <div style={{ color: 'white', fontSize: '18px', fontWeight: 'bold' }}>
-                    ${fmt(selectedCrypto.market_cap / 1e9, 1) + 'B'}
-                  </div>
-                </div>
-              ) : null}
-              {selectedCrypto?.price_change_percentage_7d !== undefined ? (
-                <div style={{
-                  background: 'rgba(0, 0, 0, 0.2)',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  border: '1px solid rgba(0, 212, 255, 0.2)',
-                  minHeight: '60px'
-                }}>
-                  <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '12px' }}>TVL 7d Change</div>
-                  <div style={{ 
-                    color: (selectedCrypto.price_change_percentage_7d || 0) >= 0 ? '#00ff88' : '#ff4444', 
-                    fontSize: '16px', 
-                    fontWeight: 'bold' 
-                  }}>
-                    {fmt(selectedCrypto.price_change_percentage_7d||0,1)}%
-                  </div>
-                </div>
-              ) : null}
-              {/* fundamentalsData.unlock_next card removed; property does not exist */}
-            </div>
-          </div>
-
-          {/* Fundamentals Analysis */}
-          <div className="glass-card" style={{ marginBottom: '24px', padding: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-              <div style={{ fontSize: '24px', marginRight: '12px' }}>🏗️</div>
-              <h3 style={{ color: 'rgb(0, 212, 255)', margin: '0', fontSize: '20px', fontWeight: 'bold' }}>
-                Fundamentals Analysis
-              </h3>
-            </div>
-            
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '20px'
-            }}>
+          {/* Fundamentals Analysis - Merged into single section */}
+          {(fundamentalsData || selectedCrypto?.market_cap || selectedCrypto?.circulating_supply || fundsList.length > 0) && (
+            <div className="glass-card" style={{ marginBottom: '24px', padding: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+                <div style={{ fontSize: '24px', marginRight: '12px' }}>🏗️</div>
+                <h3 style={{ color: 'rgb(0, 212, 255)', margin: '0', fontSize: '20px', fontWeight: 'bold' }}>
+                  Fundamentals Analysis
+                </h3>
+              </div>
+              
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '20px'
+              }}>
               {/* Circulating Supply Card */}
               {fundamentalsData?.circulating_supply ? (
                 <div style={{
@@ -1119,23 +1297,42 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
                   </div>
                 </div>
               ) : null}
+
+              {/* Top Investment Funds - Only show if funds data exists */}
+              {fundsList.length > 0 && (
+                <div style={{
+                  gridColumn: '1 / -1',
+                  background: 'linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05))',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  border: '1px solid rgba(255, 184, 0, 0.3)',
+                  marginTop: '10px'
+                }}>
+                  <div style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '14px', marginBottom: '12px', fontWeight: '500' }}>
+                    💰 Top Investment Funds (CryptoRank)
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                    {fundsList.map((f: any, idx: number) => (
+                      <span key={idx} style={{
+                        background: 'rgba(0,212,255,0.1)',
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(0, 212, 255, 0.3)',
+                        color: '#eee',
+                        display: 'inline-block',
+                        fontSize: '12px'
+                      }}>
+                        <b>{f.name}</b> 
+                        {f.investment_stage && <span style={{opacity: 0.7, marginLeft: '6px'}}>{f.investment_stage}</span>}
+                        {f.project_count && <span style={{color: '#fffd6e', marginLeft: '6px'}}>{f.project_count} projects</span>}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Add CSS animations */}
-          <div style={{margin:'18px 0'}}>
-            <label style={{fontWeight:600}}><input type="checkbox" checked={showFunds} onChange={()=>setShowFunds(v=>!v)}/> Show top funds invested (CryptoRank)</label>
-            {showFunds && fundsList.length > 0 && (
-              <div className="glass-card" style={{padding:'15px 10px',margin:'10px 0',fontSize:'13px'}}>
-                <h4 style={{color:'#00d4ff',margin:'0 0 8px'}}>Top Investing Funds</h4>
-                <div style={{display:'flex',flexWrap:'wrap',gap:'10px'}}>
-                  {fundsList.map(f=>(<span key={f.id} style={{background:'rgba(0,212,255,0.07)',padding:'3px 10px',borderRadius:'7px',border:'1px solid #09f2',color:'#eee',display:'inline-block'}}>
-                    <b>{f.name}</b> <span style={{opacity:.7}}>{f.investment_stage}</span> <span style={{color:'#fffd6e'}}>{f.project_count}</span>
-                  </span>))}
-                </div>
-              </div>
-            )}
-          </div>
+          )}
 
           {/* AI Research Report */}
           <div className="glass-card" style={{ marginBottom: '24px', padding: '24px' }}>
@@ -1324,20 +1521,71 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
               gap: '20px',
               marginBottom: '24px'
             }}>
-              {/* Technical Analysis */}
-              {typeof researchData.technical_analysis === 'object' ? (
+              {/* Technical Analysis - Improved display with parsed JSON */}
+              {researchData.technical_analysis ? (
                 <div style={{
-                  background: 'rgba(0, 0, 0, 0.2)',
+                  background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.05))',
                   borderRadius: '12px',
                   padding: '20px',
-                  border: '1px solid rgba(0, 212, 255, 0.2)'
+                  border: '1px solid rgba(0, 212, 255, 0.3)'
                 }}>
-                  <h4 style={{ color: 'rgb(0, 212, 255)', margin: '0 0 12px 0', fontSize: '16px', fontWeight: 'bold' }}>
+                  <h4 style={{ color: 'rgb(0, 212, 255)', margin: '0 0 16px 0', fontSize: '16px', fontWeight: 'bold' }}>
                     📊 Technical Analysis
                   </h4>
-                  <p style={{ color: 'rgba(255, 255, 255, 0.8)', lineHeight: '1.6', margin: '0', fontSize: '14px' }}>
-                    {JSON.stringify(researchData.technical_analysis) || 'N/A'}
-                  </p>
+                  <div style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: '16px',
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    fontSize: '14px',
+                    lineHeight: '1.8'
+                  }}>
+                    {typeof researchData.technical_analysis === 'string' ? (
+                      // If it's a string, try to parse as JSON
+                      (() => {
+                        try {
+                          const parsed = JSON.parse(researchData.technical_analysis);
+                          return Object.entries(parsed).map(([key, value]: [string, any]) => (
+                            <div key={key} style={{
+                              padding: '12px',
+                              background: 'rgba(0, 0, 0, 0.2)',
+                              borderRadius: '8px',
+                              border: '1px solid rgba(0, 212, 255, 0.2)'
+                            }}>
+                              <div style={{ fontWeight: 'bold', color: 'rgb(0, 212, 255)', marginBottom: '6px', textTransform: 'capitalize' }}>
+                                {key.replace(/_/g, ' ')}
+                              </div>
+                              <div style={{ color: 'rgba(255, 255, 255, 0.9)', lineHeight: '1.6' }}>
+                                {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+                              </div>
+                            </div>
+                          ));
+                        } catch {
+                          // If not JSON, display as is
+                          return <div style={{ whiteSpace: 'pre-wrap' }}>{researchData.technical_analysis}</div>;
+                        }
+                      })()
+                    ) : typeof researchData.technical_analysis === 'object' ? (
+                      // If it's already an object, display formatted
+                      Object.entries(researchData.technical_analysis).map(([key, value]: [string, any]) => (
+                        <div key={key} style={{
+                          padding: '12px',
+                          background: 'rgba(0, 0, 0, 0.2)',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(0, 212, 255, 0.2)'
+                        }}>
+                          <div style={{ fontWeight: 'bold', color: 'rgb(0, 212, 255)', marginBottom: '6px', textTransform: 'capitalize' }}>
+                            {key.replace(/_/g, ' ')}
+                          </div>
+                          <div style={{ color: 'rgba(255, 255, 255, 0.9)', lineHeight: '1.6' }}>
+                            {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{String(researchData.technical_analysis)}</div>
+                    )}
+                  </div>
                 </div>
               ) : null}
 

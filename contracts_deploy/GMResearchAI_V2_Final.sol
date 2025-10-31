@@ -16,7 +16,6 @@ contract GMResearchAI_V2_Final is Ownable {
     event DailyCheckIn(address indexed user, uint256 reward);
     event AIResearch(address indexed user, string topic, uint256 cost);
     event PoolFunded(address indexed funder, uint256 amount);
-    // FHE-style events (for future integration)
     event DailyCheckInFHE(address indexed user, bytes32 handle, bytes proof);
     event AIResearchFHE(address indexed user, string topic, uint256 cost, bytes32 handle, bytes proof);
     
@@ -27,49 +26,31 @@ contract GMResearchAI_V2_Final is Ownable {
     function dailyCheckIn() external {
         address user = msg.sender;
         uint256 currentDay = block.timestamp / 86400; // UTC day
-        
         require(lastCheckInDay[user] < currentDay, "Already checked in today");
-        
         require(gmToken.balanceOf(address(this)) >= DAILY_CHECKIN_REWARD, "Insufficient pool balance");
-        
         lastCheckInDay[user] = currentDay;
-        
         require(gmToken.transfer(user, DAILY_CHECKIN_REWARD), "Transfer failed");
-        
         emit DailyCheckIn(user, DAILY_CHECKIN_REWARD);
     }
     
     function performAIResearch(string memory topic) external {
         address user = msg.sender;
-        
         require(gmToken.balanceOf(user) >= AI_RESEARCH_COST, "Insufficient GM balance");
         require(gmToken.transferFrom(user, address(this), AI_RESEARCH_COST), "Transfer failed");
-        
         researchCount[user]++;
-        
         emit AIResearch(user, topic, AI_RESEARCH_COST);
     }
 
-    // ========== FHE-style Endpoints (public fallback, no decryption on-chain) ==========
-    // These functions accept handles/proofs from the frontend to be forward-compatible
-    // with Zama FHEVM. For now, they operate on public ERC20 balances for compatibility.
-
-    // Daily check-in using FHE-style parameters (handle/proof are logged for auditing)
     function dailyCheckInFHE(bytes32 encryptedRewardHandle, bytes calldata inputProof) external {
-        // For now, reuse public logic to enforce daily rules & pool checks
         this.dailyCheckIn();
         emit DailyCheckInFHE(msg.sender, encryptedRewardHandle, inputProof);
     }
 
-    // Perform AI research using FHE-style parameters (cost enforced as constant)
     function performAIResearchFHE(string memory topic, uint256 costPublic, bytes32 encryptedCostHandle, bytes calldata inputProof) external {
-        // Enforce expected cost to prevent manipulation
         require(costPublic == AI_RESEARCH_COST, "Invalid research cost");
-
         address user = msg.sender;
         require(gmToken.balanceOf(user) >= AI_RESEARCH_COST, "Insufficient GM balance");
         require(gmToken.transferFrom(user, address(this), AI_RESEARCH_COST), "Transfer failed");
-
         researchCount[user]++;
         emit AIResearch(user, topic, AI_RESEARCH_COST);
         emit AIResearchFHE(user, topic, AI_RESEARCH_COST, encryptedCostHandle, inputProof);
@@ -93,3 +74,5 @@ contract GMResearchAI_V2_Final is Ownable {
         return researchCount[user];
     }
 }
+
+

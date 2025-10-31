@@ -76,6 +76,16 @@ class AIReportService {
       marketData?.market_data?.current_price?.usd ??
       0
     );
+    const high24h = (
+      marketData?.high_24h ??
+      marketData?.market_data?.high_24h?.usd ??
+      'N/A'
+    );
+    const low24h = (
+      marketData?.low_24h ??
+      marketData?.market_data?.low_24h?.usd ??
+      'N/A'
+    );
     const marketCap = (
       marketData?.market_cap ??
       marketData?.market_data?.market_cap?.usd ??
@@ -93,14 +103,35 @@ class AIReportService {
     );
     const rank = marketData?.market_cap_rank ?? marketData?.market_data?.market_cap_rank ?? 'N/A';
 
-    const rsi = technicalData?.rsi?.value ?? 'N/A';
+    // Extract detailed Technical Analysis data
+    const rsiValue = technicalData?.rsi?.value ?? 'N/A';
     const rsiSignal = technicalData?.rsi?.signal ?? 'N/A';
-    const macd = technicalData?.macd?.macd ?? 'N/A';
+    const rsiStrength = technicalData?.rsi?.strength ?? 'N/A';
+    
+    const macdValue = technicalData?.macd?.macd ?? 'N/A';
+    const macdSignal = technicalData?.macd?.signal ?? 'N/A';
+    const macdHistogram = technicalData?.macd?.histogram ?? 'N/A';
     const macdSignalType = technicalData?.macd?.signal_type ?? 'N/A';
+    
+    const ema12 = technicalData?.ema?.ema_12 ?? 'N/A';
+    const ema26 = technicalData?.ema?.ema_26 ?? 'N/A';
+    const ema50 = technicalData?.ema?.ema_50 ?? 'N/A';
+    const ema200 = technicalData?.ema?.ema_200 ?? 'N/A';
     const emaTrend = technicalData?.ema?.trend ?? 'N/A';
-    const bbPos = technicalData?.bollinger_bands?.position ?? 'N/A';
-    const adx = technicalData?.adx?.value ?? 'N/A';
+    
+    const bbUpper = technicalData?.bollinger_bands?.upper ?? 'N/A';
+    const bbMiddle = technicalData?.bollinger_bands?.middle ?? 'N/A';
+    const bbLower = technicalData?.bollinger_bands?.lower ?? 'N/A';
+    const bbPosition = technicalData?.bollinger_bands?.position ?? 'N/A';
+    
+    const adxValue = technicalData?.adx?.value ?? 'N/A';
     const adxStrength = technicalData?.adx?.trend_strength ?? 'N/A';
+    
+    const supportLevels = technicalData?.support_resistance?.support ?? [];
+    const resistanceLevels = technicalData?.support_resistance?.resistance ?? [];
+    
+    const volumeTrend = technicalData?.volume_analysis?.volume_trend ?? 'N/A';
+    const volumeVsAvg = technicalData?.volume_analysis?.volume_vs_avg ?? 'N/A';
 
     const circulatingSupply = fundamentalsData?.circulating_supply ?? 0;
     const totalSupply = fundamentalsData?.total_supply ?? 0;
@@ -112,39 +143,89 @@ class AIReportService {
     const atlChange = fundamentalsData?.atl_change_percentage ?? 0;
 
     return `
-Analyze ${symbol} cryptocurrency and provide a comprehensive investment report.
+Analyze ${symbol} cryptocurrency and provide a comprehensive, objective, and accurate investment report based on the provided market data, technical analysis, and fundamentals.
 
+═══════════════════════════════════════════════════════════════
 MARKET DATA (from CoinGecko):
-- Current Price (USD): $${Number(currentPrice).toFixed(2)}
-- Market Cap (USD): $${Number(marketCap).toLocaleString()}
-- 24h Change (%): ${Number(change24hPct).toFixed(2)}
-- Volume 24h (USD): $${Number(volume24h).toLocaleString()}
-- Market Cap Rank: #${rank}
+═══════════════════════════════════════════════════════════════
+• Current Price: $${Number(currentPrice).toFixed(2)}
+• 24h High: $${typeof high24h === 'number' ? Number(high24h).toFixed(2) : high24h}
+• 24h Low: $${typeof low24h === 'number' ? Number(low24h).toFixed(2) : low24h}
+• 24h Price Range: ${typeof high24h === 'number' && typeof low24h === 'number' ? `${((Number(high24h) - Number(low24h)) / Number(low24h) * 100).toFixed(2)}%` : 'N/A'}
+• 24h Change: ${Number(change24hPct) >= 0 ? '+' : ''}${Number(change24hPct).toFixed(2)}%
+• Market Cap: $${Number(marketCap).toLocaleString()}
+• 24h Volume: $${Number(volume24h).toLocaleString()}
+• Market Cap Rank: #${rank}
 
-TECHNICAL ANALYSIS (from Taapi.io or fallbacks when unavailable):
-- RSI (14): ${rsi} (${rsiSignal})
-- MACD: ${macd} (${macdSignalType})
-- EMA Trend: ${emaTrend}
-- Bollinger Bands Position: ${bbPos}
-- ADX: ${adx} (${adxStrength})
+═══════════════════════════════════════════════════════════════
+TECHNICAL ANALYSIS (from Taapi.io):
+═══════════════════════════════════════════════════════════════
+RSI (Relative Strength Index - 14 period):
+  • Value: ${rsiValue} ${typeof rsiValue === 'number' ? (rsiValue > 70 ? '(OVERBOUGHT)' : rsiValue < 30 ? '(OVERSOLD)' : '(NEUTRAL)') : ''}
+  • Signal: ${rsiSignal}
+  • Strength: ${rsiStrength}/100
 
+MACD (Moving Average Convergence Divergence):
+  • MACD Line: ${macdValue}
+  • Signal Line: ${macdSignal}
+  • Histogram: ${macdHistogram} ${typeof macdHistogram === 'number' ? (macdHistogram > 0 ? '(BULLISH)' : '(BEARISH)') : ''}
+  • Overall Signal: ${macdSignalType}
+
+EMA (Exponential Moving Averages):
+  • EMA 12: $${typeof ema12 === 'number' ? Number(ema12).toFixed(2) : ema12}
+  • EMA 26: $${typeof ema26 === 'number' ? Number(ema26).toFixed(2) : ema26}
+  • EMA 50: $${typeof ema50 === 'number' ? Number(ema50).toFixed(2) : ema50}
+  • EMA 200: $${typeof ema200 === 'number' ? Number(ema200).toFixed(2) : ema200}
+  • Trend: ${emaTrend}
+  • Price vs EMAs: Current price ($${Number(currentPrice).toFixed(2)}) is ${typeof ema200 === 'number' ? (Number(currentPrice) > ema200 ? 'ABOVE' : 'BELOW') : ''} 200-day EMA
+
+Bollinger Bands:
+  • Upper Band: $${typeof bbUpper === 'number' ? Number(bbUpper).toFixed(2) : bbUpper}
+  • Middle Band (SMA 20): $${typeof bbMiddle === 'number' ? Number(bbMiddle).toFixed(2) : bbMiddle}
+  • Lower Band: $${typeof bbLower === 'number' ? Number(bbLower).toFixed(2) : bbLower}
+  • Current Position: ${bbPosition} ${typeof currentPrice === 'number' && typeof bbUpper === 'number' && typeof bbLower === 'number' ? (Number(currentPrice) > bbUpper ? '(Above upper - potential reversal)' : Number(currentPrice) < bbLower ? '(Below lower - potential bounce)' : '(Within bands)') : ''}
+
+ADX (Average Directional Index):
+  • Value: ${adxValue} ${typeof adxValue === 'number' ? (adxValue > 25 ? '(STRONG TREND)' : adxValue > 20 ? '(MODERATE TREND)' : '(WEAK TREND)') : ''}
+  • Trend Strength: ${adxStrength}
+
+Support & Resistance Levels:
+  • Support Levels: ${supportLevels.length > 0 ? supportLevels.map((s: number) => `$${s.toFixed(2)}`).join(', ') : 'N/A'}
+  • Resistance Levels: ${resistanceLevels.length > 0 ? resistanceLevels.map((r: number) => `$${r.toFixed(2)}`).join(', ') : 'N/A'}
+
+Volume Analysis:
+  • Volume Trend: ${volumeTrend}
+  • Volume vs Average: ${typeof volumeVsAvg === 'number' ? `${volumeVsAvg > 0 ? '+' : ''}${volumeVsAvg.toFixed(2)}%` : volumeVsAvg}
+
+═══════════════════════════════════════════════════════════════
 FUNDAMENTALS (from CryptoRank):
-- Circulating Supply: ${(circulatingSupply / 1e6).toFixed(1)}M
-- Total Supply: ${totalSupply > 0 ? (totalSupply / 1e6).toFixed(1) + 'M' : 'N/A'}
-- Max Supply: ${maxSupply > 0 ? (maxSupply / 1e6).toFixed(1) + 'M' : 'Unlimited'}
-- Market Cap Dominance: ${marketCapDominance.toFixed(2)}%
-- All-Time High: $${ath.toFixed(2)} (${athChange.toFixed(2)}% from ATH)
-- All-Time Low: $${atl.toFixed(2)} (${atlChange.toFixed(2)}% from ATL)
+═══════════════════════════════════════════════════════════════
+• Circulating Supply: ${(circulatingSupply / 1e6).toFixed(1)}M tokens
+• Total Supply: ${totalSupply > 0 ? (totalSupply / 1e6).toFixed(1) + 'M' : 'N/A'} tokens
+• Max Supply: ${maxSupply > 0 ? (maxSupply / 1e6).toFixed(1) + 'M' : 'Unlimited'} tokens
+• Market Cap Dominance: ${marketCapDominance.toFixed(2)}%
+• All-Time High: $${ath.toFixed(2)} (currently ${athChange.toFixed(2)}% below ATH)
+• All-Time Low: $${atl.toFixed(2)} (currently ${atlChange.toFixed(2)}% above ATL)
 
-Please provide:
-1. Executive Summary (2-3 sentences)
-2. Technical Analysis (key indicators and trends)
-3. Fundamental Analysis (supply metrics and market position)
-5. Risk Assessment (main risks)
-6. Recommendation (BUY/HOLD/SELL with confidence %)
-7. Price Targets (short/medium/long term)
-8. Key Risks (3-5 bullet points)
-9. Key Opportunities (3-5 bullet points)
+═══════════════════════════════════════════════════════════════
+INSTRUCTIONS:
+═══════════════════════════════════════════════════════════════
+Provide a comprehensive, objective, and data-driven investment report. Use the technical analysis values and market price data to make accurate assessments. Focus on:
+
+1. EXECUTIVE SUMMARY (2-3 sentences): High-level overview combining current price, technical signals, and market position
+2. TECHNICAL ANALYSIS: Detailed interpretation of all indicators:
+   - Explain what RSI, MACD, EMA crossovers, Bollinger Bands position mean for price action
+   - Analyze support/resistance levels in context of current price
+   - Discuss volume patterns and their significance
+   - Provide specific price levels based on technical indicators
+3. FUNDAMENTAL ANALYSIS: Supply metrics, market position, and historical performance
+4. RISK ASSESSMENT: Objective evaluation of main risks based on technical and fundamental data
+5. RECOMMENDATION: BUY/HOLD/SELL with specific confidence percentage (0-100%)
+6. PRICE TARGETS: Short-term (1-7 days), Medium-term (1-4 weeks), Long-term (1-3 months) with reasoning based on technical levels
+7. KEY RISKS: 3-5 specific risk factors supported by the data
+8. KEY OPPORTUNITIES: 3-5 specific opportunities supported by technical/fundamental analysis
+
+Be precise, objective, and reference specific technical values and price levels in your analysis.
 
 Format as JSON with these exact keys: summary, technical_analysis, fundamental_analysis, risk_assessment, recommendation, confidence_score, price_targets, key_risks, key_opportunities
     `;

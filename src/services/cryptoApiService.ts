@@ -23,6 +23,8 @@ export interface CryptoData {
   atl_change_percentage: number;
   atl_date: string;
   image: string;
+  high_24h?: number;
+  low_24h?: number;
   sparkline_in_7d?: {
     price: number[];
   };
@@ -127,6 +129,71 @@ class CryptoApiService {
       });
 
       const data = response.data;
+      const marketData = data.market_data;
+      
+      // Flatten market_data to match CryptoData interface structure
+      if (marketData) {
+        // Map all market_data properties to top level
+        const flattenedData: any = {
+          id: data.id || data.symbol,
+          symbol: (data.symbol || '').toUpperCase(),
+          name: data.name || data.id,
+          image: data.image?.small || data.image || '',
+          
+          // Price data
+          current_price: typeof marketData.current_price === 'object' 
+            ? marketData.current_price.usd 
+            : marketData.current_price,
+          high_24h: typeof marketData.high_24h === 'object' 
+            ? marketData.high_24h.usd 
+            : marketData.high_24h,
+          low_24h: typeof marketData.low_24h === 'object' 
+            ? marketData.low_24h.usd 
+            : marketData.low_24h,
+          
+          // Market cap data
+          market_cap: typeof marketData.market_cap === 'object' 
+            ? marketData.market_cap.usd 
+            : marketData.market_cap,
+          market_cap_rank: marketData.market_cap_rank || data.market_cap_rank || 0,
+          market_cap_change_percentage_24h: marketData.market_cap_change_percentage_24h || 0,
+          
+          // Volume data
+          total_volume: typeof marketData.total_volume === 'object' 
+            ? marketData.total_volume.usd 
+            : marketData.total_volume,
+          
+          // Price change percentages
+          price_change_percentage_24h: marketData.price_change_percentage_24h || 0,
+          price_change_percentage_7d: marketData.price_change_percentage_7d || 0,
+          price_change_percentage_30d: marketData.price_change_percentage_30d || 0,
+          
+          // Supply data
+          circulating_supply: marketData.circulating_supply || 0,
+          total_supply: marketData.total_supply || 0,
+          max_supply: marketData.max_supply || 0,
+          
+          // ATH/ATL data
+          ath: typeof marketData.ath === 'object' 
+            ? marketData.ath.usd 
+            : marketData.ath,
+          ath_change_percentage: marketData.ath_change_percentage || 0,
+          ath_date: marketData.ath_date?.usd || marketData.ath_date || '',
+          atl: typeof marketData.atl === 'object' 
+            ? marketData.atl.usd 
+            : marketData.atl,
+          atl_change_percentage: marketData.atl_change_percentage || 0,
+          atl_date: marketData.atl_date?.usd || marketData.atl_date || '',
+          
+          // Sparkline data
+          sparkline_in_7d: data.sparkline_in_7d || marketData.sparkline_in_7d || { price: [] }
+        };
+        
+        this.setCachedData(cacheKey, flattenedData);
+        return flattenedData;
+      }
+      
+      // Fallback: return data as-is if no market_data
       this.setCachedData(cacheKey, data);
       return data;
     } catch (error) {
@@ -152,6 +219,8 @@ class CryptoApiService {
         atl_change_percentage: 900,
         atl_date: '2015-01-14T00:00:00.000Z',
         image: '',
+        high_24h: 1050,
+        low_24h: 950,
         sparkline_in_7d: { price: [] }
       };
       this.setCachedData(cacheKey, mockData);

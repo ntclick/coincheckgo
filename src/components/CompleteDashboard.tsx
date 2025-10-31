@@ -11,8 +11,6 @@ declare global {
     swapGMForETH?: (gmAmount?: string) => void;
     forceDecryptConfidentialBalance?: () => void;
     forceEIP712Signature?: () => void;
-    dailyCheckIn?: () => void;
-    checkDailyCheckInStatus?: () => Promise<string>;
     addLiquidity?: () => void;
     addLiquidityWithAmounts?: (ethAmount: string, gmAmount: string) => void;
   }
@@ -48,8 +46,6 @@ export const CompleteDashboard: React.FC = () => {
   const [feedStats, setFeedStats] = useState<{[key: string]: number}>({}); // Track feed statistics
   const [topGainers, setTopGainers] = useState<any[]>([]);
   const [topLosers, setTopLosers] = useState<any[]>([]);
-  const [countdownTimer, setCountdownTimer] = useState('');
-  const [checkInStatus, setCheckInStatus] = useState<'not-checked' | 'ready' | 'completed' | 'loading'>('not-checked');
   const [marketList, setMarketList] = useState<any[]>([]);
   const [isLoadingMarket, setIsLoadingMarket] = useState(false);
   const [marketPage, setMarketPage] = useState(0); // pagination for MarketCap
@@ -449,37 +445,6 @@ export const CompleteDashboard: React.FC = () => {
     }
   };
 
-  // Check on-chain daily check-in status
-  const checkDailyCheckInStatus = async () => {
-    if (!isConnected || !address) {
-      setCheckInStatus('not-checked');
-      return;
-    }
-
-    try {
-      console.log('🔍 Checking daily check-in status on-chain...');
-      
-      // Call the on-chain check function from the injected script
-      if (window.checkDailyCheckInStatus) {
-        const status = await window.checkDailyCheckInStatus();
-        console.log('📊 Daily check-in status:', status);
-        
-        if (status === 'completed') {
-          setCheckInStatus('completed');
-        } else if (status === 'ready') {
-          setCheckInStatus('ready');
-        } else {
-          setCheckInStatus('not-checked');
-        }
-      } else {
-        console.log('⚠️ checkDailyCheckInStatus function not available');
-        setCheckInStatus('ready'); // Default to ready when function not available
-      }
-    } catch (error) {
-      console.error('❌ Failed to check daily check-in status:', error);
-      setCheckInStatus('ready'); // Default to ready on error
-    }
-  };
 
   // Load public data once on mount
   useEffect(() => {
@@ -495,12 +460,18 @@ export const CompleteDashboard: React.FC = () => {
       (window as any).walletFirstConnected = true;
 
       loadHomeData();
-      checkDailyCheckInStatus();
 
       // Auto-trigger EIP-712 signature only once after wallet connection
-      if (!(window as any).decryptionTriggeredOnce) {
+      // Only trigger if not already done in this session
+      if (!(window as any).decryptionTriggeredOnce && !(window as any).eip712LastSigned) {
         (window as any).decryptionTriggeredOnce = true;
         setTimeout(() => {
+          // Double check before triggering (may have been triggered by another source)
+          if ((window as any).eip712DecryptionInProgress || ((window as any).eip712LastSigned && Date.now() - (window as any).eip712LastSigned < 60000)) {
+            console.log('⏸️ EIP-712 already in progress or signed recently, skipping...');
+            return;
+          }
+          
           console.log('🔐 Triggering EIP-712 signature once after wallet connection...');
           (window as any).walletJustConnected = true;
           (window as any).userRequestedDecryption = true;
@@ -527,12 +498,11 @@ export const CompleteDashboard: React.FC = () => {
       // Don't call loadAllData() here to avoid continuous reloading
     };
 
-    const handleTransactionSuccess = () => {
-      console.log('💰 Reloading balance after successful transaction...');
-      // Reload balance data from blockchain
+    const handleTransactionSuccess = (event: any) => {
+      console.log('💰 Transaction successful:', event.detail?.type);
+      // Only reload balance, don't reload page or check status
       if (isConnected) {
-        loadHomeData();
-        // Re-trigger balance load from injected script
+        // Re-trigger balance load from injected script (silent, no UI refresh)
         setTimeout(() => {
           if ((window as any).loadTokenBalances) {
             (window as any).loadTokenBalances();
@@ -558,53 +528,7 @@ export const CompleteDashboard: React.FC = () => {
   }, [currentPage]);
 
 
-  // Countdown timer effect (reset at 07:00 UTC+7 == 00:00 UTC)
-  useEffect(() => {
-    const updateCountdown = () => {
-      const now = new Date();
-      // Next midnight UTC (which equals 07:00 UTC+7 local reset)
-      const nextUtcMidnight = new Date(now);
-      nextUtcMidnight.setUTCHours(24, 0, 0, 0);
-      const timeLeft = nextUtcMidnight.getTime() - now.getTime();
-      const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-      const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-      
-      setCountdownTimer(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
-    };
 
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Listen for check-in availability changes from injected script
-  useEffect(() => {
-    const handleCheckInAvailabilityChanged = (event: any) => {
-      const { available } = event.detail;
-      if (!available) {
-        setCheckInStatus('completed');
-        console.log('🔒 Daily Check-in button hidden until next reset');
-      } else {
-        setCheckInStatus('ready');
-        console.log('🔓 Daily Check-in button available');
-      }
-    };
-
-    window.addEventListener('checkInAvailabilityChanged', handleCheckInAvailabilityChanged);
-    return () => window.removeEventListener('checkInAvailabilityChanged', handleCheckInAvailabilityChanged);
-  }, []);
-
-  // Listen for successful check-in completion
-  useEffect(() => {
-    const handleCheckInSuccess = () => {
-      setCheckInStatus('completed');
-      console.log('✅ Daily check-in completed successfully');
-    };
-
-    window.addEventListener('checkInSuccess', handleCheckInSuccess);
-    return () => window.removeEventListener('checkInSuccess', handleCheckInSuccess);
-  }, []);
 
   return (
     <div className="modern-dashboard">
@@ -1183,130 +1107,6 @@ export const CompleteDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Daily Check-in */}
-            <div className="glass-card" style={{ marginBottom: '30px' }}>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between', 
-                marginBottom: '15px' 
-              }}>
-                <h2 style={{ color: 'rgb(0, 212, 255)', margin: '0px' }}>✅ Daily Check-in</h2>
-                <div style={{ 
-                  fontSize: '11px', 
-                  padding: '4px 8px', 
-                  borderRadius: '8px',
-                  background: 'rgba(255, 84, 89, 0.15)', 
-                  color: 'rgb(255, 84, 89)', 
-                  border: '1px solid rgb(255, 84, 89)' 
-                }}>⚠️ FHE Required</div>
-                </div>
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '1fr 1fr', 
-                gap: '20px', 
-                marginBottom: '20px' 
-              }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ 
-                    fontSize: '12px', 
-                    color: 'rgba(255, 255, 255, 0.7)', 
-                    marginBottom: '8px' 
-                  }}>Status</div>
-                  <div style={{ 
-                    fontSize: '18px', 
-                    fontWeight: 'bold', 
-                    color: checkInStatus === 'completed' ? 'rgb(0, 255, 136)' : 
-                           checkInStatus === 'ready' ? 'rgb(0, 212, 255)' : 'rgb(255, 71, 87)', 
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}>
-                    {checkInStatus === 'completed' ? '✅ Checked in today' : 
-                     checkInStatus === 'ready' ? '🔄 Ready to check-in' : '❌ Not checked in'}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ 
-                    fontSize: '12px', 
-                    color: 'rgba(255, 255, 255, 0.7)', 
-                    marginBottom: '8px' 
-                  }}>Next reset in</div>
-                  <div style={{ 
-                    fontSize: '24px', 
-                    fontWeight: 'bold', 
-                    color: 'rgb(0, 212, 255)', 
-                    fontFamily: 'monospace',
-                    background: 'rgba(0, 212, 255, 0.1)', 
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(0, 212, 255, 0.3)' 
-                  }}>{countdownTimer}</div>
-                </div>
-              </div>
-              <button 
-                id="dailyCheckInBtn"
-                disabled={!isConnected || checkInStatus === 'completed' || checkInStatus === 'loading'}
-                className="modern-btn"
-                style={{ 
-                  width: '100%',
-                  background: checkInStatus === 'completed' ? 'rgb(102, 102, 102)' :
-                             checkInStatus === 'loading' ? 'linear-gradient(135deg, rgb(255, 193, 7), rgb(255, 152, 0))' :
-                             isConnected ? 'linear-gradient(135deg, rgb(0, 255, 136), rgb(0, 212, 255))' : 'rgb(102, 102, 102)', 
-                  fontSize: '16px',
-                  fontWeight: '700',
-                  padding: '12px',
-                  cursor: (!isConnected || checkInStatus === 'completed' || checkInStatus === 'loading') ? 'not-allowed' : 'pointer',
-                  transition: '0.3s',
-                  opacity: checkInStatus === 'loading' ? 0.8 : 1
-                }}
-                onClick={async () => {
-                  if (!isConnected) {
-                    try {
-                      await connectWallet();
-                    } catch (error) {
-                      console.error('❌ Connect wallet error:', error);
-                    }
-                  } else if (checkInStatus === 'ready') {
-                    // Set loading state
-                    setCheckInStatus('loading');
-
-                    // Trigger daily check-in
-                    console.log('🔍 Checking window.dailyCheckIn availability:', typeof window.dailyCheckIn);
-                    if (window.dailyCheckIn) {
-                      try {
-                        await window.dailyCheckIn();
-                        // Refresh status after check-in
-                        setTimeout(() => {
-                          checkDailyCheckInStatus();
-                        }, 2000);
-                      } catch (error) {
-                        console.error('❌ Daily check-in failed:', error);
-                        // Reset to ready state on error
-                        setCheckInStatus('ready');
-                      }
-                    } else {
-                      console.log('❌ Daily check-in function is not available in window object');
-                      console.log('🔍 Available window functions:', Object.keys(window).filter(key => key.includes('Check') || key.includes('check') || key.includes('daily')));
-                      alert('Daily check-in system is not ready. Please refresh the page and try again.');
-                      setCheckInStatus('ready');
-                    }
-                  }
-                }}
-              >
-                {checkInStatus === 'completed' ? '✅ Checked in today' :
-                 checkInStatus === 'loading' ? '⏳ Sending transaction...' :
-                 isConnected ? '🔄 Daily Check-in' : '🔒 Connect Wallet'}
-              </button>
-              <p style={{ 
-                  fontSize: '11px', 
-                color: 'rgba(255, 255, 255, 0.5)', 
-                textAlign: 'center', 
-                marginTop: '8px' 
-              }}>💡 Daily rewards: 100 GM tokens</p>
-              </div>
-              
             {/* Latest News */}
             <div className="news-section">
               <h3>📰 Latest News</h3>

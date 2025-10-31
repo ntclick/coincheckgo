@@ -242,13 +242,14 @@ class TaapiService {
   }
 
   // Get comprehensive technical analysis using bulk query (more efficient)
-  async getTechnicalAnalysis(symbol: string, interval: string = '1h'): Promise<TechnicalAnalysis> {
+  // currentPrice: Optional current price from CoinGecko to validate and calculate position
+  async getTechnicalAnalysis(symbol: string, interval: string = '1h', currentPrice?: number): Promise<TechnicalAnalysis> {
     if (!this.apiKey && !this.allowMock) throw new Error('Taapi.io API key not configured and mock data not allowed.');
     if (!this.apiKey && this.allowMock) return this.getMockTechnicalAnalysis();
 
     try {
       // Use bulk query to get all indicators in one request (more efficient)
-      const bulkResponse = await this.getBulkTechnicalAnalysis(symbol, interval);
+      const bulkResponse = await this.getBulkTechnicalAnalysis(symbol, interval, currentPrice);
       return bulkResponse;
     } catch (error) {
       console.error(`Error fetching technical analysis for ${symbol}:`, error);
@@ -258,12 +259,28 @@ class TaapiService {
   }
 
   // Bulk query for multiple indicators (more efficient according to Taapi.io docs)
-  async getBulkTechnicalAnalysis(symbol: string, interval: string = '1h'): Promise<TechnicalAnalysis> {
+  // currentPrice: Optional current price from CoinGecko to validate and calculate position
+  async getBulkTechnicalAnalysis(symbol: string, interval: string = '1h', currentPrice?: number): Promise<TechnicalAnalysis> {
     if (!this.apiKey) throw new Error('Taapi.io API key not configured.');
 
     const cacheKey = `bulk_ta_${symbol}_${interval}`;
     const cached = this.getCachedData(cacheKey);
-    if (cached) return cached;
+    if (cached) {
+      // If we have cached data but also have currentPrice, recalculate position-dependent fields
+      if (currentPrice && cached.bollinger_bands) {
+        cached.bollinger_bands.position = this.calculateBollingerPosition(
+          currentPrice,
+          cached.bollinger_bands.upper,
+          cached.bollinger_bands.lower
+        );
+        cached.support_resistance = this.calculateSupportResistance(
+          currentPrice,
+          cached.bollinger_bands.upper,
+          cached.bollinger_bands.lower
+        );
+      }
+      return cached;
+    }
 
     try {
       // Use bulk endpoint as per Taapi.io documentation
@@ -287,7 +304,7 @@ class TaapiService {
       });
 
       const data = response.data.data;
-      const result = this.parseBulkResponse(data);
+      const result = this.parseBulkResponse(data, currentPrice);
       
       this.setCachedData(cacheKey, result);
       return result;
@@ -297,8 +314,25 @@ class TaapiService {
     }
   }
 
+  // Validate indicator value against current price (within reasonable range)
+  private validatePriceValue(value: number, currentPrice: number, maxDeviation: number = 2): number {
+    if (!value || value <= 0 || !currentPrice || currentPrice <= 0) return 0;
+    // Check if value is within maxDeviation * 100% range from current price
+    // maxDeviation = 1 means value can be from 0 to 2x currentPrice (100% deviation up)
+    // maxDeviation = 2 means value can be from 0 to 3x currentPrice (200% deviation up)
+    const minValid = currentPrice * 0.1; // At least 10% of current price (reasonable lower bound)
+    const maxValid = currentPrice * (1 + maxDeviation); // Can be up to (1 + maxDeviation) * currentPrice
+    if (value >= minValid && value <= maxValid) {
+      return value;
+    }
+    // Value is outside reasonable range, invalidate it
+    console.warn(`⚠️ Taapi value ${value.toFixed(4)} is outside valid range (${minValid.toFixed(4)} - ${maxValid.toFixed(4)}) for current price ${currentPrice.toFixed(4)}. Invalidating.`);
+    return 0;
+  }
+
   // Parse bulk response into TechnicalAnalysis format
-  private parseBulkResponse(data: any[]): TechnicalAnalysis {
+  // currentPrice: Optional current price from CoinGecko to validate and calculate position
+  private parseBulkResponse(data: any[], currentPrice?: number): TechnicalAnalysis {
     const indicators: any = {};
     
     data.forEach(item => {
@@ -317,19 +351,44 @@ class TaapiService {
           signal_type: this.getMACDSignalType(item.result.valueMACD, item.result.valueMACDSignal)
         };
       } else if (id.includes('ema_12')) {
-        indicators.ema12 = item.result.value;
+        // Validate EMA values against current price
+        indicators.ema12 = currentPrice ? this.validatePriceValue(item.result.value || 0, currentPrice, 1.5) : (item.result.value || 0);
       } else if (id.includes('ema_26')) {
-        indicators.ema26 = item.result.value;
+        indicators.ema26 = currentPrice ? this.validatePriceValue(item.result.value || 0, currentPrice, 1.5) : (item.result.value || 0);
       } else if (id.includes('ema_50')) {
-        indicators.ema50 = item.result.value;
+        indicators.ema50 = currentPrice ? this.validatePriceValue(item.result.value || 0, currentPrice, 1.5) : (item.result.value || 0);
       } else if (id.includes('ema_200')) {
-        indicators.ema200 = item.result.value;
+        indicators.ema200 = currentPrice ? this.validatePriceValue(item.result.value || 0, currentPrice, 2) : (item.result.value || 0);
       } else if (id.includes('bbands2')) {
+        // Validate Bollinger Bands values against current price
+        let upper = item.result.valueUpperBand || 0;
+        let middle = item.result.valueMiddleBand || 0;
+        let lower = item.result.valueLowerBand || 0;
+        
+        if (currentPrice) {
+          // Bollinger Bands should be within reasonable range (e.g., ±50% of current price)
+          upper = this.validatePriceValue(upper, currentPrice, 1);
+          middle = this.validatePriceValue(middle, currentPrice, 1);
+          lower = this.validatePriceValue(lower, currentPrice, 1);
+          
+          // If any band is invalid, recalculate from current price (if we have at least middle band)
+          if ((upper === 0 || lower === 0) && middle > 0 && this.validatePriceValue(middle, currentPrice, 0.5) === middle) {
+            // Recalculate bands around middle band (typical BB has ±2 standard deviations)
+            const deviation = middle * 0.05; // 5% deviation for typical volatility
+            upper = upper === 0 ? middle + deviation : upper;
+            lower = lower === 0 ? middle - deviation : lower;
+          }
+        }
+        
         indicators.bollinger = {
-          upper: item.result.valueUpperBand,
-          middle: item.result.valueMiddleBand,
-          lower: item.result.valueLowerBand,
-          position: 'NEUTRAL' as const // Will be calculated based on current price
+          upper,
+          middle,
+          lower,
+          position: currentPrice && upper > 0 && lower > 0 ? this.calculateBollingerPosition(
+            currentPrice,
+            upper,
+            lower
+          ) : 'NEUTRAL' as const
         };
       } else if (id.includes('adx')) {
         indicators.adx = {
@@ -338,6 +397,16 @@ class TaapiService {
         };
       }
     });
+
+    // Calculate support/resistance based on current price and validated bollinger bands if available
+    let supportResistance = { support: [] as number[], resistance: [] as number[] };
+    if (currentPrice && indicators.bollinger && indicators.bollinger.upper > 0 && indicators.bollinger.lower > 0) {
+      supportResistance = this.calculateSupportResistance(
+        currentPrice,
+        indicators.bollinger.upper,
+        indicators.bollinger.lower
+      );
+    }
 
     return {
       rsi: indicators.rsi || this.getMockRSI(),
@@ -351,14 +420,63 @@ class TaapiService {
       },
       bollinger_bands: indicators.bollinger || this.getMockBollingerBands(),
       adx: indicators.adx || this.getMockADX(),
-      support_resistance: {
-        support: [indicators.bollinger?.lower * 0.95 || 80, indicators.bollinger?.lower * 0.9 || 75],
-        resistance: [indicators.bollinger?.upper * 1.05 || 120, indicators.bollinger?.upper * 1.1 || 125]
-      },
+      support_resistance: supportResistance,
       volume_analysis: {
         volume_trend: 'STABLE',
         volume_vs_avg: 100
       }
+    };
+  }
+
+  // Calculate Bollinger Bands position based on current price
+  private calculateBollingerPosition(currentPrice: number, upper: number, lower: number): 'OVERBOUGHT' | 'OVERSOLD' | 'NEUTRAL' {
+    if (!upper || !lower || !currentPrice || upper <= lower || currentPrice <= 0) return 'NEUTRAL';
+    
+    // Validate that bands are within reasonable range of current price (not 100x different)
+    const priceRange = Math.max(upper - lower, currentPrice * 0.1); // At least 10% of current price
+    if (upper > currentPrice * 10 || lower < currentPrice * 0.1) {
+      console.warn(`⚠️ Bollinger Bands (${lower.toFixed(4)} - ${upper.toFixed(4)}) are too far from current price ${currentPrice}, invalidating position.`);
+      return 'NEUTRAL';
+    }
+    
+    if (currentPrice >= upper) return 'OVERBOUGHT';
+    if (currentPrice <= lower) return 'OVERSOLD';
+    return 'NEUTRAL';
+  }
+
+  // Calculate Support/Resistance levels based on current price and bollinger bands
+  private calculateSupportResistance(currentPrice: number, upper: number, lower: number): { support: number[]; resistance: number[] } {
+    if (!upper || !lower || !currentPrice || upper <= lower || currentPrice <= 0) {
+      // No valid bollinger bands, calculate from current price only
+      if (currentPrice > 0) {
+        return {
+          support: [currentPrice * 0.92, currentPrice * 0.85].filter(s => s > 0 && s < currentPrice),
+          resistance: [currentPrice * 1.08, currentPrice * 1.15].filter(r => r > 0 && r > currentPrice)
+        };
+      }
+      return { support: [], resistance: [] };
+    }
+
+    // Validate bands are reasonable (within 5x of current price)
+    if (upper > currentPrice * 5 || lower < currentPrice * 0.2) {
+      console.warn(`⚠️ Bollinger Bands are invalid for support/resistance calculation. Using price-based levels.`);
+      return {
+        support: [currentPrice * 0.92, currentPrice * 0.85].filter(s => s > 0 && s < currentPrice),
+        resistance: [currentPrice * 1.08, currentPrice * 1.15].filter(r => r > 0 && r > currentPrice)
+      };
+    }
+
+    // Support levels: Below current price, based on bollinger lower and price action
+    const support1 = Math.max(lower * 0.95, currentPrice * 0.92); // 8% below current or lower band
+    const support2 = Math.max(lower * 0.90, currentPrice * 0.85); // 15% below current
+    
+    // Resistance levels: Above current price, based on bollinger upper and price action
+    const resistance1 = Math.min(upper * 1.05, currentPrice * 1.08); // 8% above current or upper band
+    const resistance2 = Math.min(upper * 1.10, currentPrice * 1.15); // 15% above current
+
+    return {
+      support: [support1, support2].filter(s => s > 0 && s < currentPrice),
+      resistance: [resistance1, resistance2].filter(r => r > 0 && r > currentPrice)
     };
   }
 

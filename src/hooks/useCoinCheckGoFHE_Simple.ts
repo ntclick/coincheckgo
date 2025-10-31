@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { toast } from 'react-hot-toast';
+import { encryptValueWithProof } from '../utils/fhevm';
 
 // Extend Window interface for FHEVM
 declare global {
@@ -30,10 +31,10 @@ const notifyGlobalStateChange = () => {
   globalStateListeners.forEach(listener => listener());
 };
 
-  // Contract addresses - Updated to match deployed contracts
-  const GMToken_ADDRESS = '0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08';
-  const SwapETHToGM_ADDRESS = '0x438A2ce1B563E71b68F2f0EE0575736CccF3231e';
-  const Research_ADDRESS = '0x0f45E8Fd3BB3ef64D93741bC1F9cf9cB53675aB8'; // 50,000 GM funded
+  // Contract addresses - use env with sensible fallbacks
+  const GMToken_ADDRESS = (process.env.REACT_APP_GM_TOKEN_ADDRESS as string) || '0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08';
+  const SwapETHToGM_ADDRESS = (process.env.REACT_APP_SWAP_ADDRESS as string) || '0x438A2ce1B563E71b68F2f0EE0575736CccF3231e';
+  const Research_ADDRESS = (process.env.REACT_APP_RESEARCH_AI_ADDRESS as string) || '0xBD341699753FEa3305bf16Eaf8228A1F96E945fF';
 
 // Contract ABIs
 const GMToken_ABI = [
@@ -70,8 +71,12 @@ const SwapETHToGM_ABI = [
 ];
 
 const Research_ABI = [
+  // Public paths
   "function dailyCheckIn() external",
   "function performAIResearch(string memory topic) external",
+  // FHE-style endpoints (forward compatible)
+  "function dailyCheckInFHE(bytes32 encryptedRewardHandle, bytes inputProof) external",
+  "function performAIResearchFHE(string topic, uint256 costPublic, bytes32 encryptedCostHandle, bytes inputProof) external",
   "function fundPool(uint256 amount) external",
   "function getPoolBalance() external view returns (uint256)",
   "function hasCheckedInToday(address user) external view returns (bool)",
@@ -104,6 +109,69 @@ const useCoinCheckGoFHESimple = () => {
     };
   }, []);
   
+  // Auto-restore wallet connection from localStorage on mount
+  useEffect(() => {
+    const restoreWalletConnection = async () => {
+      try {
+        const cachedConnected = localStorage.getItem('wallet_connected');
+        const cachedAddress = localStorage.getItem('wallet_address');
+        
+        if (cachedConnected === 'true' && cachedAddress && window.ethereum) {
+          console.log('🔄 Restoring wallet connection from cache...');
+          
+          // Check if MetaMask still has the same address
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          if (accounts.length > 0 && accounts[0].toLowerCase() === cachedAddress.toLowerCase()) {
+            // Same address, restore connection
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const signer = await provider.getSigner();
+            const userAddress = await signer.getAddress();
+            
+            // Create contract instances
+            const gmToken = new ethers.Contract(GMToken_ADDRESS, GMToken_ABI, signer);
+            const swap = new ethers.Contract(SwapETHToGM_ADDRESS, SwapETHToGM_ABI, signer);
+            const research = new ethers.Contract(Research_ADDRESS, Research_ABI, signer);
+            
+            // Restore state
+            setIsConnected(true);
+            setAddress(userAddress);
+            globalHookState.isConnected = true;
+            globalHookState.address = userAddress;
+            notifyGlobalStateChange();
+            
+            // Restore contracts
+            setGmTokenContract(gmToken);
+            setSwapContract(swap);
+            setResearchContract(research);
+            
+            // Also set contracts on window object
+            (window as any).tokenContract = gmToken;
+            (window as any).swapContract = swap;
+            (window as any).researchContract = research;
+            
+            // Initialize FHEVM
+            await initializeFHEVM(window.ethereum);
+            setFhevmInitialized(true);
+            setAclPermissionsGranted(true);
+            
+            console.log('✅ Wallet connection restored from cache');
+          } else {
+            // Address changed or no accounts, clear cache
+            localStorage.removeItem('wallet_connected');
+            localStorage.removeItem('wallet_address');
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to restore wallet connection:', error);
+        // Clear invalid cache
+        localStorage.removeItem('wallet_connected');
+        localStorage.removeItem('wallet_address');
+      }
+    };
+    
+    restoreWalletConnection();
+  }, []); // Only run once on mount
+
   // Sync local state with global state when it changes
   useEffect(() => {
     setIsConnected(globalHookState.isConnected);
@@ -197,7 +265,15 @@ const useCoinCheckGoFHESimple = () => {
       globalHookState.isConnected = true;
       globalHookState.address = userAddress;
       notifyGlobalStateChange(); // Notify all listeners
-      // Debug log removed
+      
+      // Cache wallet connection to localStorage for persistence across page reloads
+      try {
+        localStorage.setItem('wallet_connected', 'true');
+        localStorage.setItem('wallet_address', userAddress);
+        console.log('💾 Wallet connection cached to localStorage');
+      } catch (err) {
+        console.warn('⚠️ Failed to cache wallet connection:', err);
+      }
       
       // Set contracts
       setGmTokenContract(gmToken);
@@ -274,6 +350,20 @@ const useCoinCheckGoFHESimple = () => {
     
     // Reset decryption trigger flag
     (window as any).decryptionTriggered = false;
+    
+    // Clear cached wallet connection from localStorage
+    try {
+      localStorage.removeItem('wallet_connected');
+      localStorage.removeItem('wallet_address');
+      console.log('💾 Wallet connection cache cleared');
+    } catch (err) {
+      console.warn('⚠️ Failed to clear wallet cache:', err);
+    }
+    
+    // Update global state
+    globalHookState.isConnected = false;
+    globalHookState.address = '';
+    notifyGlobalStateChange();
     
     toast.success('Wallet disconnected');
   };
@@ -637,82 +727,133 @@ const useCoinCheckGoFHESimple = () => {
       }
       const costFormatted = parseFloat(ethers.formatEther(cost));
       console.log(`💰 Research cost: ${costFormatted} GM tokens`);
-
-      // Check balance using PUBLIC GM only (ignore confidential for research)
-      const publicBalance = (window as any).userPublicBalance ?? userPublicBalance ?? 0;
-      const effectiveBalance = Number(publicBalance);
-
-      console.log(`💰 User balance check (PUBLIC only):`, {
-        public: publicBalance,
-        effective: effectiveBalance,
-        required: costFormatted,
-        hasEnough: effectiveBalance >= costFormatted
-      });
-
-      if (effectiveBalance < costFormatted) {
-        console.log(`❌ Insufficient PUBLIC balance: ${effectiveBalance} < ${costFormatted}`);
-        toast.error(`❌ Insufficient GM tokens (public)! Need ${costFormatted} GM, you have ${effectiveBalance} GM.`);
-        return null;
-      }
-
-      console.log('✅ Balance check passed, proceeding with EIP-712...');
-
-      // Create EIP-712 signature for FHE research authorization
-      console.log('🔐 Creating EIP-712 signature for FHE research...');
-
-      const eip712Data = {
-        types: {
-          EIP712Domain: [
-            { name: "name", type: "string" },
-            { name: "version", type: "string" },
-            { name: "chainId", type: "uint256" },
-            { name: "verifyingContract", type: "address" }
-          ],
-          ResearchRequest: [
-            { name: "user", type: "address" },
-            { name: "researchType", type: "uint256" },
-            { name: "cost", type: "uint256" },
-            { name: "timestamp", type: "uint256" }
-          ]
-        },
-        primaryType: "ResearchRequest",
-        domain: {
-          name: "FHE Research",
-          version: "1",
-          chainId: 11155111,
-          verifyingContract: Research_ADDRESS
-        },
-        message: {
-          user: address,
-          researchType: researchType,
-          cost: cost.toString(),
-          timestamp: Math.floor(Date.now() / 1000)
-        }
-      };
-
-      console.log('🔐 Requesting EIP-712 signature from MetaMask...');
-      console.log('🔐 EIP-712 data prepared:', eip712Data);
-      toast('🔐 Please sign the research authorization in MetaMask...', { duration: 5000 });
-
-      const signature = await window.ethereum.request({
-        method: 'eth_signTypedData_v4',
-        params: [address, JSON.stringify(eip712Data)]
-      });
-
-      console.log('✅ EIP-712 signature obtained for research');
-      console.log('🔐 Signature length:', signature?.length || 0);
+      
+      // No frontend balance check - let contract validate on-chain
+      console.log('📝 Proceeding with research - contract will validate balance on-chain');
+      console.log('🔐 Skipping EIP-712 signature - sending FHE transaction directly...');
 
       // Create signer-based contract for write operations
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+      
+      // Ensure gmTokenContract is available (recover from window or create new instance)
+      let gmTokenContractToUse = gmTokenContract;
+      if (!gmTokenContractToUse) {
+        console.log('⚠️ gmTokenContract is null, trying to recover from window...');
+        const winGmToken = (window as any).gmTokenContract;
+        if (winGmToken) {
+          gmTokenContractToUse = winGmToken;
+          console.log('✅ Recovered gmTokenContract from window');
+        } else {
+          // Create new instance if not available
+          console.log('🔧 Creating new gmTokenContract instance...');
+          gmTokenContractToUse = new ethers.Contract(GMToken_ADDRESS, GMToken_ABI, signer);
+          setGmTokenContract(gmTokenContractToUse);
+          (window as any).gmTokenContract = gmTokenContractToUse;
+          console.log('✅ Created new gmTokenContract instance');
+        }
+      }
+
+      // Check and approve GM tokens if needed (contract needs approval to transferFrom)
+      // Approve a larger amount once (100 GM) to avoid repeated approvals
+      try {
+        // Check current allowance first
+        const currentAllowance = await gmTokenContractToUse.allowance(address, Research_ADDRESS);
+        const currentAllowanceFormatted = parseFloat(ethers.formatEther(currentAllowance));
+        
+        // Only approve if allowance is less than required cost
+        if (currentAllowanceFormatted >= costFormatted) {
+          // Allowance is sufficient, skip approval
+        } else {
+          // Approve 100 GM once - enough for 10 research transactions without re-approving
+          const approvalAmount = 100; // 100 GM covers 10 research transactions
+          toast(`🔐 Approving ${approvalAmount} GM tokens (covers ${Math.floor(approvalAmount / costFormatted)} research transactions)...`, { duration: 3000 });
+          
+          const approveAmount = ethers.parseEther(approvalAmount.toString());
+          const approveTx = await gmTokenContractToUse.approve(Research_ADDRESS, approveAmount);
+          await approveTx.wait(1);
+          
+          toast.success(`✅ Approved ${approvalAmount} GM tokens - no need to approve again for ${Math.floor(approvalAmount / costFormatted)} more transactions`);
+        }
+      } catch (approvalError: any) {
+        console.error('❌ Approval failed:', approvalError);
+        toast.error(`❌ Failed to approve GM tokens: ${approvalError.message}`);
+        throw approvalError; // Re-throw to prevent continuing without approval
+      }
+
       const researchContractWithSigner = new ethers.Contract(Research_ADDRESS, Research_ABI, signer);
 
       console.log('📝 Submitting research transaction...');
       toast('⏳ Submitting research transaction to blockchain...', { duration: 3000 });
 
-      // Perform research with topic
+      // Perform research with topic - using FHE flow
       const researchTopic = `AI Research - ${new Date().toISOString()}`;
-      const tx = await researchContractWithSigner.performAIResearch(researchTopic);
+      
+      // Check if FHEVM is available for FHE encryption
+      // MUST use FHE flow - contract only accepts performAIResearchFHE
+      let tx;
+      
+      try {
+        console.log('🔐 Using FHE flow for research transaction (required by contract)...');
+        
+        // Ensure FHEVM is available with createEncryptedInput method
+        let fhevmReady = (window as any).fhevm && typeof (window as any).fhevm.createEncryptedInput === 'function';
+        
+        if (!fhevmReady) {
+          console.log('⏳ Waiting for FHEVM to be ready...');
+          // Wait up to 5 seconds for FHEVM
+          for (let i = 0; i < 10; i++) {
+            await new Promise(r => setTimeout(r, 500));
+            fhevmReady = (window as any).fhevm && typeof (window as any).fhevm.createEncryptedInput === 'function';
+            if (fhevmReady) {
+              console.log('✅ FHEVM is now ready');
+              break;
+            }
+          }
+        }
+        
+        if (!fhevmReady) {
+          throw new Error('FHEVM not ready - createEncryptedInput method not available. Please wait for FHEVM initialization.');
+        }
+        
+        // Encrypt the cost value using FHEVM
+        // Use getAddress from ethers v6
+        const getAddr = ethers.getAddress || ((addr: string) => addr);
+        const contractAddress = getAddr(Research_ADDRESS);
+        const userAddressChecksum = getAddr(address);
+        
+        // Convert cost from wei to GM units for encryption
+        const costInGM = Number(cost / BigInt(10**18));
+        console.log(`🔐 Encrypting cost: ${costInGM} GM`);
+        console.log(`🔐 Contract address: ${contractAddress}`);
+        console.log(`🔐 User address: ${userAddressChecksum}`);
+        console.log(`🔐 FHEVM instance available:`, !!(window as any).fhevm);
+        console.log(`🔐 FHEVM createEncryptedInput:`, typeof (window as any).fhevm?.createEncryptedInput);
+        
+        // Encrypt cost value with proof
+        const { handle: encryptedCostHandle, inputProof } = await encryptValueWithProof(
+          costInGM,
+          contractAddress,
+          userAddressChecksum
+        );
+        
+        console.log('🔐 Encrypted cost handle:', encryptedCostHandle);
+        console.log('🔐 Input proof length:', inputProof?.length || 0);
+        
+        // Call FHE version with encrypted cost (contract REQUIRES this)
+        tx = await researchContractWithSigner.performAIResearchFHE(
+          researchTopic,
+          cost, // costPublic (must match AI_RESEARCH_COST for validation)
+          encryptedCostHandle, // encryptedCostHandle (bytes32)
+          inputProof // inputProof (bytes)
+        );
+        
+        console.log('✅ FHE research transaction submitted');
+      } catch (fheError: any) {
+        console.error('❌ FHE encryption/transaction failed:', fheError);
+        toast.error(`❌ FHE research failed: ${fheError.message}. Please ensure FHEVM is initialized.`);
+        throw fheError; // Don't fallback - contract requires FHE flow
+      }
 
       console.log('📤 Research transaction sent:', tx.hash);
       toast('📤 Research transaction submitted - waiting for confirmation...', { duration: 3000 });
@@ -722,20 +863,25 @@ const useCoinCheckGoFHESimple = () => {
       const receipt = await tx.wait();
 
       console.log('✅ Research transaction confirmed on-chain!');
-      toast(`🎉 Research completed successfully! ${costFormatted} GM tokens deducted from your balance.`, { duration: 5000 });
+      
+      // Show "đang nhận kết quả" (receiving results) message
+      toast('📊 Đang nhận kết quả... Vui lòng đợi.', { duration: 8000 });
 
-      // Dispatch transaction success event to trigger balance reload
+      // Dispatch transaction success event to trigger balance reload ONLY
       window.dispatchEvent(new CustomEvent('transactionSuccess', {
         detail: { type: 'research', amount: costFormatted }
       }));
 
-      // Reload balance after research
+      // Load balance once after transaction (only reload, no page refresh)
       setTimeout(() => {
         console.log('🔄 Reloading balance after research...');
-        loadDataWithContracts(gmTokenContract!, swapContract!, researchContract!, address, true);
+        if ((window as any).loadTokenBalances) {
+          (window as any).loadTokenBalances();
+        }
       }, 2000);
 
       // Return transaction for external use
+      // Note: Page reload will be handled in AIResearchTool after results are received
       return tx;
 
     } catch (error: any) {
@@ -751,12 +897,19 @@ const useCoinCheckGoFHESimple = () => {
       if (error.code === 4001 || error.message?.includes('rejected')) {
         toast.error('❌ Research cancelled - signature rejected');
         console.log('🔐 User rejected EIP-712 signature for research');
-      } else if (error.message?.includes('insufficient')) {
+      } else if (error.message?.includes('allowance') || error.reason?.includes('allowance')) {
+        // Contract rejected due to insufficient allowance
+        toast.error('❌ Insufficient token allowance - approval required. Please try again.');
+        console.log('🔑 Contract rejected: Insufficient allowance');
+      } else if (error.message?.includes('insufficient') || error.message?.includes('Insufficient')) {
+        // Contract rejected due to insufficient balance on-chain
         toast.error('❌ Insufficient GM tokens - please swap ETH to GM first');
-        console.log('💰 Insufficient balance for research');
+        console.log('💰 Contract rejected: Insufficient balance for research');
       } else {
-        toast.error(`❌ Research failed: ${error.shortMessage || error.message}`);
-        console.log('💥 Unexpected error during research:', error.message);
+        // Show contract error message
+        const errorMsg = error.reason || error.shortMessage || error.message || 'Unknown error';
+        toast.error(`❌ Research failed: ${errorMsg}`);
+        console.log('💥 Research failed:', error.message);
       }
 
       return null;
