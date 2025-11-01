@@ -2,7 +2,7 @@
 
 An AI-powered crypto research platform aggregating trusted market, technical, and fundamentals data — with privacy by default using **Fully Homomorphic Encryption (FHE)**.
 
-🌐 **Website**: [coincheckgo.com](http://coincheckgo.com/) | 🚀 **Demo**: [coincheckgofhe.vercel.app](https://coincheckgofhe.vercel.app/) | 👤 **Author**: [@trungkts29](https://x.com/trungkts29)
+🌐 **Website**: [coincheckgo.com](http://coincheckgo.com/) | 🚀 **Demo**: [coincheckgo.vercel.app](https://coincheckgo.vercel.app/) | 👤 **Author**: [@trungkts29](https://x.com/trungkts29)
 
 ---
 
@@ -183,7 +183,7 @@ src/
 ## 🌐 Links
 
 - **Production**: [coincheckgo.com](http://coincheckgo.com/) *(coming soon)*
-- **Demo**: [coincheckgofhe.vercel.app](https://coincheckgofhe.vercel.app/)
+- **Demo**: [coincheckgo.vercel.app](https://coincheckgo.vercel.app/)
 - **Author**: [@trungkts29](https://x.com/trungkts29)
 - **Demo Video**: [YouTube Demo](https://www.youtube.com/watch?v=zbNFWXedU0o)
 
