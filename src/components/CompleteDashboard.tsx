@@ -494,6 +494,9 @@ export const CompleteDashboard: React.FC = () => {
     };
 
     const handleTransactionSuccess = (event: any) => {
+      // Show success notification to user
+      toast.success(`✅ Transaction ${event.detail?.type || 'completed'} successful!`);
+      
       // Only reload balance, don't reload page or check status
       if (isConnected) {
         // Re-trigger balance load from injected script (silent, no UI refresh)
@@ -689,8 +692,10 @@ export const CompleteDashboard: React.FC = () => {
                     }}
                     onClick={() => {
                       if (window.loadGMTokens) {
+                        toast.loading('🪙 Minting 100 GM tokens...');
                         window.loadGMTokens(100);
                       } else {
+                        toast.error('⚠️ Function not available');
                       }
                     }}
                   >
@@ -922,19 +927,23 @@ export const CompleteDashboard: React.FC = () => {
                           try {
                             await connectWallet();
                           } catch (error) {
-                            console.error('❌ Connect wallet error:', error);
+                            toast.error('❌ Connect wallet failed');
                           }
                         } else {
                           // Trigger swap based on direction
                         if (swapDirection === 'ETH_TO_GM') {
                           if (window.swapETHForGM) {
+                            toast.loading(`💱 Swapping ${fromAmount} ETH for GM...`);
                             window.swapETHForGM(fromAmount);
                           } else {
+                            toast.error('⚠️ Function not available');
                           }
                         } else {
                           if (window.swapGMForETH) {
+                            toast.loading(`🔐 Swapping ${fromAmount} GM for ETH...`);
                             window.swapGMForETH(fromAmount);
                           } else {
+                            toast.error('⚠️ Function not available');
                           }
                         }
                         }
@@ -1016,10 +1025,13 @@ export const CompleteDashboard: React.FC = () => {
                       }}
                       onClick={() => {
                         if (window.addLiquidityWithAmounts) {
+                          toast.loading(`🏊 Adding ${liquidityETH} ETH + ${liquidityGM} GM liquidity...`);
                           window.addLiquidityWithAmounts(liquidityETH, liquidityGM);
                         } else if (window.addLiquidity) {
+                          toast.loading('🏊 Adding liquidity...');
                           window.addLiquidity();
                         } else {
+                          toast.error('⚠️ Function not available');
                         }
                       }}
                     >
@@ -1467,19 +1479,23 @@ export const CompleteDashboard: React.FC = () => {
                           try {
                             await connectWallet();
                           } catch (error) {
-                            console.error('❌ Connect wallet error:', error);
+                            toast.error('❌ Connect wallet failed');
                           }
                         } else {
                           // Trigger swap based on direction
                         if (swapDirection === 'ETH_TO_GM') {
                           if (window.swapETHForGM) {
+                            toast.loading('💱 Swapping ETH for GM...');
                             window.swapETHForGM();
                           } else {
+                            toast.error('⚠️ Function not available');
                           }
                         } else {
                           if (window.swapGMForETH) {
+                            toast.loading('🔐 Swapping GM for ETH...');
                             window.swapGMForETH();
                           } else {
+                            toast.error('⚠️ Function not available');
                           }
                         }
                         }
