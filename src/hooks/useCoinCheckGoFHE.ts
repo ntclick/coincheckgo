@@ -221,11 +221,6 @@ export function useCoinCheckGoFHE() {
         // Check if already checked in today
         const day = await contract.getCurrentDay();
         setHasCheckedInToday(lastDay >= Number(day));
-        
-          lastCheckInDay: lastDay,
-          hasActiveResearch: userData[1],
-          hasCheckedInToday: lastDay >= Number(day)
-        });
       } catch (e) {
         setHasCheckedInToday(false);
       }
@@ -368,11 +363,6 @@ export function useCoinCheckGoFHE() {
            // CRITICAL: Encrypt with the SAME address that will sign the transaction
            // This ensures FHE permissions match the transaction signer
            const { handle, inputProof } = await encryptValueWithProof(gmAmount, '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A', address);
-        handle, 
-        inputProofLength: inputProof.length,
-        contractAddress: '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A',
-        userAddress: address
-      });
 
       // Execute swap (send ETH) - ensure same signer as encryption
       const tx = await swapContract.swapETHToGM(
