@@ -166,6 +166,7 @@ src/
 - **Production**: [coincheckgo.com](http://coincheckgo.com/) *(coming soon)*
 - **Demo**: [coincheckgofhe.vercel.app](https://coincheckgofhe.vercel.app/)
 - **Author**: [@trungkts29](https://x.com/trungkts29)
+- **Demo Video**: [YouTube Demo](https://www.youtube.com/watch?v=zbNFWXedU0o)
 
 ---
 
