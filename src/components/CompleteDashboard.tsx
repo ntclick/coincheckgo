@@ -313,9 +313,9 @@ export const CompleteDashboard: React.FC = () => {
         }
       }
       
-      // Sort by date and take latest 12
+      // Sort by date and store all news (no limit for pagination)
       allNews.sort((a: any, b: any) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
-      setNewsData(allNews.slice(0, 12));
+      setNewsData(allNews);
     } catch (error) {
       console.error('Error fetching news:', error);
       // Fallback to static news
@@ -1656,7 +1656,7 @@ export const CompleteDashboard: React.FC = () => {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', marginBottom: '100px' }}>
                 <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
-                  Showing {getPaginatedNews().length} of {getPaginatedNews().length} articles (Total: {getFilteredNewsCount()} articles)
+                  Showing {getPaginatedNews().length} articles (Total: {getFilteredNewsCount()} articles)
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button 
