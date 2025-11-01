@@ -45,7 +45,7 @@ export const CompleteDashboard: React.FC = () => {
   const [newsData, setNewsData] = useState<any[]>([]);
   const [isLoadingNews, setIsLoadingNews] = useState(false);
   const [newsFilter, setNewsFilter] = useState('All');
-  const [displayedNewsCount, setDisplayedNewsCount] = useState(12); // Show 12 initially
+  const [newsPage, setNewsPage] = useState(0); // pagination for News
   const [feedStats, setFeedStats] = useState<{[key: string]: number}>({}); // Track feed statistics
   const [topGainers, setTopGainers] = useState<any[]>([]);
   const [topLosers, setTopLosers] = useState<any[]>([]);
@@ -336,29 +336,34 @@ export const CompleteDashboard: React.FC = () => {
         return title.includes(searchTerm) || description.includes(searchTerm);
       });
     }
-    return filtered.slice(0, displayedNewsCount);
+    return filtered;
   };
 
   // Get filtered news count
   const getFilteredNewsCount = () => {
-    if (newsFilter === 'All') return newsData.length;
-    return newsData.filter((news: any) => {
-      const title = news.title.toLowerCase();
-      const description = news.description.toLowerCase();
-      const searchTerm = newsFilter.toLowerCase();
-      return title.includes(searchTerm) || description.includes(searchTerm);
-    }).length;
+    return getFilteredNews().length;
   };
 
-  // Load more news
-  const loadMoreNews = () => {
-    setDisplayedNewsCount((prev: number) => Math.min(prev + 12, getFilteredNewsCount()));
+  // Get paginated news
+  const getPaginatedNews = () => {
+    const filtered = getFilteredNews();
+    const itemsPerPage = 12;
+    const startIndex = newsPage * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filtered.slice(startIndex, endIndex);
+  };
+
+  // Get total pages
+  const getTotalNewsPages = () => {
+    const itemsPerPage = 12;
+    const total = getFilteredNewsCount();
+    return Math.ceil(total / itemsPerPage);
   };
 
   // Handle filter change
   const handleFilterChange = (filter: string) => {
     setNewsFilter(filter);
-    setDisplayedNewsCount(12); // Reset to show 12 when filter changes
+    setNewsPage(0); // Reset to page 0 when filter changes
   };
 
   // Load all data
@@ -1604,8 +1609,8 @@ export const CompleteDashboard: React.FC = () => {
               </div>
           </div>
               ) : (
-                <div className={`news-grid ${getFilteredNews().length === 1 ? 'single-news' : ''}`}>
-                  {getFilteredNews().map((news: any, index: number) => (
+                <div className={`news-grid ${getPaginatedNews().length === 1 ? 'single-news' : ''}`}>
+                  {getPaginatedNews().map((news: any, index: number) => (
                     <div key={index} className="news-card" onClick={() => window.open(news.link, '_blank')}>
                       {news.imageUrl && (
                         <div className="news-image-container">
@@ -1637,23 +1642,39 @@ export const CompleteDashboard: React.FC = () => {
           </div>
         )}
 
-              <div style={{ textAlign: 'center', marginTop: '20px', marginBottom: '40px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', marginBottom: '100px' }}>
+                <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
+                  Page {newsPage + 1} of {getTotalNewsPages()}
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button 
+                  onClick={() => setNewsPage(p => Math.max(0, p - 1))}
+                  disabled={newsPage === 0}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '8px',
+                    color: 'rgba(255,255,255,0.9)',
+                    padding: '8px 12px',
+                    cursor: newsPage === 0 ? 'not-allowed' : 'pointer',
+                    fontSize: '12px'
+                  }}
+                >Prev</button>
                 <button 
-                  onClick={loadMoreNews}
-                  disabled={displayedNewsCount >= getFilteredNewsCount()}
+                  onClick={() => setNewsPage(p => (p + 1 < getTotalNewsPages() ? p + 1 : p))}
+                  disabled={newsPage + 1 >= getTotalNewsPages()}
                   style={{
                     background: 'linear-gradient(135deg, rgb(0, 212, 255), rgb(157, 78, 221))',
                     border: 'none',
                     borderRadius: '8px',
                     color: 'white',
-                    padding: '10px 20px',
-                    cursor: displayedNewsCount >= getFilteredNewsCount() ? 'not-allowed' : 'pointer',
-                    opacity: displayedNewsCount >= getFilteredNewsCount() ? 0.6 : 1
+                    padding: '8px 12px',
+                    cursor: newsPage + 1 >= getTotalNewsPages() ? 'not-allowed' : 'pointer',
+                    fontSize: '12px'
                   }}
-                >
-                  {displayedNewsCount >= getFilteredNewsCount() ? '✅ All Loaded' : `📰 Load More (${getFilteredNewsCount() - displayedNewsCount} remaining)`}
-                    </button>
-                  </div>
+                >Next</button>
+                </div>
+              </div>
             </div>
           </div>
         )}
