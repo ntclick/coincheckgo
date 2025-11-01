@@ -161,7 +161,6 @@ const AIResearchCenterSimple: React.FC<AIResearchCenterSimpleProps> = ({ setCurr
   };
 
   const handleRefine = (query: string) => {
-    console.log('Refining research with query:', query);
     // TODO: Implement refinement logic
   };
 

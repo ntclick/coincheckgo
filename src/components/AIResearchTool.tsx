@@ -92,7 +92,6 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
           const coins = (localData.coins || localData.default?.coins || []) as CryptoData[];
           if (Array.isArray(coins) && coins.length > 0) {
             setTopCryptos(prev => (prev && prev.length > 0 ? prev : (coins as any)));
-            // console.log(`✅ Loaded ${coins.length} cryptocurrencies from local JSON`);
           }
         } catch {}
 
@@ -104,7 +103,6 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
           for (const c of cryptos) if ((c as any)?.id) byId.set((c as any).id, c);
           return Array.from(byId.values()).slice(0, 300);
         });
-        // console.log(`✅ Loaded ${cryptos.length} cryptocurrencies from CoinGecko`);
       } catch (error) {
         console.error('Error loading cryptocurrencies:', error);
         try {
@@ -112,7 +110,6 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
           const coins = (localData.coins || localData.default?.coins || []) as CryptoData[];
           if (coins.length > 0) {
             setTopCryptos(coins as any);
-            // console.log(`✅ Loaded ${coins.length} cryptocurrencies from local JSON`);
           } else {
             setResearchError('Failed to load cryptocurrency data');
           }
@@ -132,12 +129,10 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
     return 10; // 10 GM tokens for research
   };
 
-
   // Handle crypto selection
   const handleCryptoSelect = (crypto: CryptoData) => {
     setSelectedCrypto(crypto);
     setCoinSymbol(crypto.symbol);
-    // console.log('🔍 Crypto selected:', crypto.symbol);
   };
 
   // Disable button when: no coin selected, not connected, or researching/processing
@@ -156,8 +151,6 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
       return;
     }
 
-    console.log('🚀 Starting research for:', coinSymbol);
-
     setResearchError('');
     setResearchData(null);
     setResearchProgress('Preparing transaction...');
@@ -169,12 +162,10 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
 
       // If transaction failed or was cancelled, stop here
       if (!tx) {
-        console.log('❌ Research transaction failed or was cancelled');
         setResearchProgress('');
         return;
       }
 
-      console.log('✅ Research transaction confirmed on-chain:', tx.hash);
       setResearchProgress('✅ Transaction confirmed - Processing...');
 
       // Now proceed with API data fetching (only after successful on-chain transaction)
@@ -184,7 +175,6 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
         const marketData = await cryptoApiService.getCryptoDetails(selectedCrypto!.id);
         await new Promise(r => setTimeout(r, 400));
         setSelectedCrypto(marketData);
-        console.log('✅ Market data fetched');
 
         setResearchProgress('📈 Analyzing technical indicators with Taapi.io...');
         // Pass current price from CoinGecko to validate and calculate technical indicators correctly
@@ -192,13 +182,11 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
         const technical = await taapiService.getTechnicalAnalysis(coinSymbol.toLowerCase(), '1h', currentPrice);
         await new Promise(r => setTimeout(r, 400));
         setTechnicalData(technical);
-        console.log('✅ Technical analysis completed', { currentPrice, technical });
 
         setResearchProgress('📊 Fetching fundamentals from CryptoRank...');
         const fundamentals = await cryptoRankService.getFundamentals(coinSymbol.toLowerCase());
         await new Promise(r => setTimeout(r, 400));
         setFundamentalsData(fundamentals);
-        console.log('✅ Fundamentals data fetched');
 
         // Skip funds data fetching
         setFundsList([]); // Set empty list
@@ -214,11 +202,9 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
         setResearchData(aiReport);
         setShowGeneratingPopup(false); // Close popup when done
         setResearchProgress('✅ Research completed successfully!');
-        console.log('✅ AI Report generated');
         
         // All processing completed - results are now displayed on the page
         // No page reload needed - user can see results immediately
-        console.log('✅ All processing completed - results displayed on page');
         
         // Refresh balance silently (no page reload)
         setTimeout(() => {

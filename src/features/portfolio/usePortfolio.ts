@@ -69,23 +69,18 @@ export function usePortfolio(userAddress: string, isConnected: boolean): Portfol
 
   const refreshPortfolio = async () => {
     if (!isConnected || !userAddress) {
-      console.log('❌ Portfolio: Not connected or no user address');
       return;
     }
 
     try {
-      console.log('📊 Portfolio: Loading from contract...', { userAddress, contractAddress: CONTRACT_ADDRESS });
       const contract = await getContract();
       if (!contract) {
-        console.log('❌ Portfolio: Contract not available');
         return;
       }
 
       // Load portfolios
-      console.log('📊 Portfolio: Getting portfolio count...');
       const portfolioCountResult = await contract.getPortfolioCount(userAddress);
       const portfolioCountNumber = Number(portfolioCountResult);
-      console.log('📊 Portfolio: Portfolio count:', portfolioCountNumber);
       setPortfolioCount(portfolioCountNumber);
 
       // Note: Contract doesn't have getPortfolioInfo function yet
@@ -101,14 +96,11 @@ export function usePortfolio(userAddress: string, isConnected: boolean): Portfol
           totalItems: 0
         });
       }
-      console.log('📊 Portfolio: Loaded portfolios (mock data):', portfolioList);
       setPortfolios(portfolioList);
 
       // Load portfolio items (FHE encrypted)
-      console.log('📊 Portfolio: Getting portfolio items count...');
       const itemsCountResult = await contract.getPortfolioItemsCount(userAddress);
       const itemsCountNumber = Number(itemsCountResult);
-      console.log('📊 Portfolio: Portfolio items count:', itemsCountNumber);
       setItemsCount(itemsCountNumber);
 
       if (itemsCountNumber > 0) {
@@ -125,14 +117,11 @@ export function usePortfolio(userAddress: string, isConnected: boolean): Portfol
             portfolioId: 0 // Default to portfolio 0
           });
         }
-        console.log('📊 Portfolio: Loaded portfolio items (with mock FHE data):', portfolioItems);
         setItems(portfolioItems);
       } else {
-        console.log('📊 Portfolio: No portfolio items found');
         setItems([]);
       }
 
-      console.log('✅ Portfolio: Successfully loaded from onchain');
 
     } catch (error) {
       console.error('❌ Portfolio: Failed to refresh portfolio:', error);

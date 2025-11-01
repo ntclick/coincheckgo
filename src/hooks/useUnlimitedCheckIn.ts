@@ -122,7 +122,6 @@ export function useUnlimitedCheckIn() {
     if (!contract || !provider || !address) return;
 
     try {
-      console.log('📊 Loading contract data for:', address);
       
       // Simple contract - always ready!
       setIsReady(true);
@@ -133,9 +132,7 @@ export function useUnlimitedCheckIn() {
       try {
         const count = await contract.getMyCount();
         setMyCount(Number(count));
-        console.log('✅ My check-in count:', Number(count));
       } catch (e) {
-        console.log('No count yet:', e);
         setMyCount(0);
       }
 
@@ -143,9 +140,7 @@ export function useUnlimitedCheckIn() {
       try {
         const total = await contract.totalCheckIns();
         setTotalCheckIns(Number(total));
-        console.log('✅ Total check-ins:', Number(total));
       } catch (e) {
-        console.log('No total yet:', e);
         setTotalCheckIns(0);
       }
     } catch (error) {
@@ -162,7 +157,6 @@ export function useUnlimitedCheckIn() {
 
     setIsLoading(true);
     try {
-      console.log('🚀 Calling checkIn()...');
       const tx = await contract.checkIn();
       toast.loading('Transaction submitted. Waiting for confirmation...');
       

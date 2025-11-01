@@ -213,7 +213,6 @@ export async function getTopFunds(symbol: string): Promise<Array<{id:number;name
     
     if (!response.ok) {
       // If endpoint doesn't exist (404), return empty array (no funds data for this coin)
-      console.log(`No funds data available for ${symbol} (404)`);
       return []; // Return empty, don't show mock data
     }
 

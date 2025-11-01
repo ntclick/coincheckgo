@@ -150,7 +150,6 @@ export function useCoinCheckGoFHE() {
       
       // Initialize FHEVM SDK
       setFhevmLoading(true);
-      console.log('🔐 Initializing FHEVM for wallet connection...');
       
       try {
         const fhevmSuccess = await initializeFHEVM(ethersProvider);
@@ -158,10 +157,8 @@ export function useCoinCheckGoFHE() {
         
         if (fhevmSuccess) {
           // Check and request ACL permissions
-          console.log('🔐 Checking ACL permissions...');
           const hasPermission = await checkACLPermissions(CONTRACT_ADDRESS);
           if (!hasPermission) {
-            console.log('🔐 Requesting ACL permissions...');
             const permissionGranted = await requestACLPermissions(CONTRACT_ADDRESS);
             setAclPermissionsGranted(permissionGranted);
           } else {
@@ -200,7 +197,6 @@ export function useCoinCheckGoFHE() {
     if (!contract || !provider || !address) return;
 
     try {
-      console.log('📊 Loading CoinCheckGoFHE data for:', address);
       
       // Always ready (no reorg wait)
       setIsReady(true);
@@ -210,9 +206,7 @@ export function useCoinCheckGoFHE() {
       try {
         const day = await contract.getCurrentDay();
         setCurrentDay(Number(day));
-        console.log('✅ Current day:', Number(day));
       } catch (e) {
-        console.log('Could not get current day:', e);
       }
 
       // Get user data (last check-in day, research status, privacy settings)
@@ -228,13 +222,11 @@ export function useCoinCheckGoFHE() {
         const day = await contract.getCurrentDay();
         setHasCheckedInToday(lastDay >= Number(day));
         
-        console.log('✅ User data:', {
           lastCheckInDay: lastDay,
           hasActiveResearch: userData[1],
           hasCheckedInToday: lastDay >= Number(day)
         });
       } catch (e) {
-        console.log('Could not get user data:', e);
         setHasCheckedInToday(false);
       }
 
@@ -252,9 +244,7 @@ export function useCoinCheckGoFHE() {
         setStreakHandle(streakH.toString());
         setTotalCheckInsHandle(totalH.toString());
         
-        console.log('✅ FHE token handles loaded (encrypted)');
       } catch (e) {
-        console.log('No tokens yet:', e);
       }
 
       // Get portfolio & watchlist counts
@@ -263,9 +253,7 @@ export function useCoinCheckGoFHE() {
         const wCount = await contract.getWatchlistCount(address);
         setPortfolioCount(Number(pCount));
         setWatchlistCount(Number(wCount));
-        console.log('✅ Portfolio:', Number(pCount), 'Watchlist:', Number(wCount));
       } catch (e) {
-        console.log('Could not get counts:', e);
       }
     } catch (error) {
       console.error('Failed to load contract data:', error);
@@ -286,7 +274,6 @@ export function useCoinCheckGoFHE() {
 
     setIsLoading(true);
     try {
-      console.log('🔐 Calling dailyCheckIn() with 0h UTC reset...');
       const tx = await contract.dailyCheckIn();
       toast.loading('Transaction submitted. Waiting for confirmation...');
       
@@ -331,11 +318,9 @@ export function useCoinCheckGoFHE() {
 
     setIsLoading(true);
     try {
-      console.log(`🔐 Minting ${amount} GM tokens with FHE encryption...`);
       
       // Encrypt the amount using FHE theo Zama v0.2.0
       const encryptedAmount = await encryptValue(amount, CONTRACT_ADDRESS, address);
-      console.log('🔐 Encrypted amount:', encryptedAmount);
       
       // Call contract with encrypted amount
       const tx = await contract.mintGmTokens(encryptedAmount);
@@ -368,7 +353,6 @@ export function useCoinCheckGoFHE() {
     setIsLoading(true);
     try {
       const gmAmount = ethAmount * 1000; // 1 ETH = 1000 GM (demo rate)
-      console.log(`🔐 Swapping ${ethAmount} ETH for ${gmAmount} GM tokens with FHE encryption...`);
 
       // Use dedicated swap contract (separate from CoinCheckGoFHE) with FHE params
       const provider = new BrowserProvider(window.ethereum);
@@ -384,7 +368,6 @@ export function useCoinCheckGoFHE() {
            // CRITICAL: Encrypt with the SAME address that will sign the transaction
            // This ensures FHE permissions match the transaction signer
            const { handle, inputProof } = await encryptValueWithProof(gmAmount, '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A', address);
-      console.log('🔐 Encrypted GM amount with proof:', { 
         handle, 
         inputProofLength: inputProof.length,
         contractAddress: '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A',
@@ -452,13 +435,11 @@ export function useCoinCheckGoFHE() {
 
     setIsLoading(true);
     try {
-      console.log(`🔐 Adding ${coinId} to portfolio with FHE encryption...`);
       
       // Encrypt amount and price using FHE theo Zama v0.2.0
       const encryptedAmount = await encryptValue(amount, CONTRACT_ADDRESS, address);
       const encryptedPrice = await encryptValue(purchasePrice, CONTRACT_ADDRESS, address);
       
-      console.log('🔐 Encrypted values:', { encryptedAmount, encryptedPrice });
       
       const tx = await contract.addPortfolioEntry(coinId, encryptedAmount, encryptedPrice);
       toast.loading('🔐 Adding encrypted data to portfolio...');

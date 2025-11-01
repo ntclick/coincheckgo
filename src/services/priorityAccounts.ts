@@ -3,7 +3,6 @@
 
 export function hardReloadPage() {
   if (typeof window !== 'undefined') {
-    console.log('🔄 [PriorityAccounts] Hard reloading page...');
     // Fix: window.location.reload() doesn't accept parameters in TypeScript strict mode
     window.location.reload(); // Remove the 'true' parameter
   }

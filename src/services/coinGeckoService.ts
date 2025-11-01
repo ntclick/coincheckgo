@@ -123,7 +123,6 @@ class CoinGeckoService {
   async initialize(): Promise<void> {
     try {
       await this.getTopCoins(100); // Pre-load top 100 coins
-      console.log('✅ CoinGecko service initialized successfully');
     } catch (error) {
       console.warn('⚠️ CoinGecko service initialization failed, using fallback data:', error);
     }

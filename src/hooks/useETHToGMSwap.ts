@@ -94,7 +94,6 @@ export function useETHToGMSwap(userAddress: string, isConnected: boolean): SwapS
     if (!isConnected || !userAddress) return;
 
     try {
-      console.log('🔄 Loading ETH to GM swap data...');
       
       const swapContract = await getContract();
       const gmTokenContract = await getGMTokenContract();
@@ -118,7 +117,6 @@ export function useETHToGMSwap(userAddress: string, isConnected: boolean): SwapS
       
       setGmTokenInfo({ name, symbol, decimals });
 
-      console.log('✅ ETH to GM swap data loaded:', { rate: Number(rate), balance: formatEther(balance) });
 
     } catch (error) {
       console.error('❌ Failed to load swap data:', error);
@@ -172,7 +170,6 @@ export function useETHToGMSwap(userAddress: string, isConnected: boolean): SwapS
 
       // Calculate expected GM amount
       const expectedGmAmount = calculateGmAmount(ethAmount);
-      console.log('🔄 Swapping:', ethAmount, 'ETH for', expectedGmAmount, 'GM tokens');
 
       // Note: In a real implementation, you would:
       // 1. Use FHEVM SDK to encrypt the GM amount

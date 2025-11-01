@@ -238,7 +238,6 @@ export const CompleteDashboard: React.FC = () => {
                        feedUrl.includes('decrypt') ? 'Decrypt' : 
                        feedUrl.includes('cointelegraph') ? 'CoinTelegraph' : 'CoinDesk';
           
-          console.log(`📰 [${source}] Found ${items.length} articles from RSS feed`);
           
           // Update feed statistics
           setFeedStats(prev => ({
@@ -448,7 +447,6 @@ export const CompleteDashboard: React.FC = () => {
     }
   };
 
-
   // Load public data once on mount
   useEffect(() => {
     loadPublicData();
@@ -459,7 +457,6 @@ export const CompleteDashboard: React.FC = () => {
   // Load balance data only once when wallet connects (not on reconnects)
   useEffect(() => {
     if (isConnected && !(window as any).walletFirstConnected) {
-      console.log('💰 Loading balance data for first time after wallet connection...');
       (window as any).walletFirstConnected = true;
 
       loadHomeData();
@@ -471,19 +468,15 @@ export const CompleteDashboard: React.FC = () => {
         setTimeout(() => {
           // Double check before triggering (may have been triggered by another source)
           if ((window as any).eip712DecryptionInProgress || ((window as any).eip712LastSigned && Date.now() - (window as any).eip712LastSigned < 60000)) {
-            console.log('⏸️ EIP-712 already in progress or signed recently, skipping...');
             return;
           }
           
-          console.log('🔐 Triggering EIP-712 signature once after wallet connection...');
           (window as any).walletJustConnected = true;
           (window as any).userRequestedDecryption = true;
 
           if (window.forceDecryptConfidentialBalance) {
-            console.log('🔐 Calling forceDecryptConfidentialBalance (one time only)...');
             window.forceDecryptConfidentialBalance();
           } else {
-            console.log('⚠️ forceDecryptConfidentialBalance not available yet...');
           }
         }, 2000);
       }
@@ -495,14 +488,12 @@ export const CompleteDashboard: React.FC = () => {
     const handleTokenBalancesUpdate = (event: any) => {
       const { publicBalance } = event.detail;
       if (publicBalance) {
-        console.log('🔄 Updating UI with balance data:', publicBalance);
         setScriptGMBalance(publicBalance);
       }
       // Don't call loadAllData() here to avoid continuous reloading
     };
 
     const handleTransactionSuccess = (event: any) => {
-      console.log('💰 Transaction successful:', event.detail?.type);
       // Only reload balance, don't reload page or check status
       if (isConnected) {
         // Re-trigger balance load from injected script (silent, no UI refresh)
@@ -529,9 +520,6 @@ export const CompleteDashboard: React.FC = () => {
       loadMarketCapData();
     }
   }, [currentPage]);
-
-
-
 
   return (
     <div className="modern-dashboard">
@@ -562,18 +550,13 @@ export const CompleteDashboard: React.FC = () => {
           <button 
             className="wallet-btn"
             onClick={async () => {
-              console.log('🔗 Connect Wallet button clicked - isConnected:', isConnected);
-              console.log('🔗 connectWallet function:', typeof connectWallet);
               if (!isConnected) {
                 try {
-                  console.log('🔗 Calling connectWallet...');
                   await connectWallet();
-                  console.log('🔗 connectWallet completed');
                 } catch (error) {
                   console.error('❌ Connect wallet error:', error);
                 }
               } else {
-                console.log('🔗 Already connected, no action needed');
               }
             }}
           >
@@ -706,10 +689,8 @@ export const CompleteDashboard: React.FC = () => {
                     }}
                     onClick={() => {
                       if (window.loadGMTokens) {
-                        console.log('🪙 Calling loadGMTokens(100)...');
                         window.loadGMTokens(100);
                       } else {
-                        console.log('⚠️ loadGMTokens function not available');
                       }
                     }}
                   >
@@ -800,7 +781,6 @@ export const CompleteDashboard: React.FC = () => {
                           readOnly={false}
                           disabled={false}
                           onChange={(e) => {
-                            console.log('🔄 From input changed:', e.target.value);
                             const value = e.target.value;
                             setFromAmount(value);
                             // Auto-calculate to amount based on direction
@@ -896,7 +876,6 @@ export const CompleteDashboard: React.FC = () => {
                           readOnly={false}
                           disabled={false}
                           onChange={(e) => {
-                            console.log('🔄 Home To input changed:', e.target.value);
                             const value = e.target.value;
                             setToAmount(value);
                             // Auto-calculate from amount based on direction
@@ -947,20 +926,15 @@ export const CompleteDashboard: React.FC = () => {
                           }
                         } else {
                           // Trigger swap based on direction
-                        console.log('🔄 Swap button clicked, direction:', swapDirection);
                         if (swapDirection === 'ETH_TO_GM') {
                           if (window.swapETHForGM) {
-                            console.log('🔄 Calling swapETHForGM with amount:', fromAmount);
                             window.swapETHForGM(fromAmount);
                           } else {
-                            console.log('⚠️ swapETHForGM function not available');
                           }
                         } else {
                           if (window.swapGMForETH) {
-                            console.log('🔐 Calling swapGMForETH (FHE Confidential) with amount:', fromAmount);
                             window.swapGMForETH(fromAmount);
                           } else {
-                            console.log('⚠️ swapGMForETH function not available');
                           }
                         }
                         }
@@ -1042,13 +1016,10 @@ export const CompleteDashboard: React.FC = () => {
                       }}
                       onClick={() => {
                         if (window.addLiquidityWithAmounts) {
-                          console.log('🏊 Calling addLiquidityWithAmounts with:', liquidityETH, 'ETH,', liquidityGM, 'GM');
                           window.addLiquidityWithAmounts(liquidityETH, liquidityGM);
                         } else if (window.addLiquidity) {
-                          console.log('🏊 Calling addLiquidity with default amounts...');
                           window.addLiquidity();
                         } else {
-                          console.log('⚠️ addLiquidity function not available');
                         }
                       }}
                     >
@@ -1450,7 +1421,6 @@ export const CompleteDashboard: React.FC = () => {
                           readOnly={false}
                           disabled={false}
                     onChange={(e) => {
-                            console.log('🔄 To input changed:', e.target.value);
                             const value = e.target.value;
                             setToAmount(value);
                             // Auto-calculate from amount based on direction
@@ -1501,20 +1471,15 @@ export const CompleteDashboard: React.FC = () => {
                           }
                         } else {
                           // Trigger swap based on direction
-                        console.log('🔄 Swap button clicked, direction:', swapDirection);
                         if (swapDirection === 'ETH_TO_GM') {
                           if (window.swapETHForGM) {
-                            console.log('🔄 Calling swapETHForGM...');
                             window.swapETHForGM();
                           } else {
-                            console.log('⚠️ swapETHForGM function not available');
                           }
                         } else {
                           if (window.swapGMForETH) {
-                            console.log('🔄 Calling swapGMForETH (FHE Confidential)...');
                             window.swapGMForETH();
                           } else {
-                            console.log('⚠️ swapGMForETH function not available');
                           }
                         }
                         }

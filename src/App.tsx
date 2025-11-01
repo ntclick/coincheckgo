@@ -10,16 +10,13 @@ function App() {
     // Auto-initialize FHEVM SDK when app loads (no wallet required)
     const initFHEVM = async () => {
       try {
-        console.log('🚀 App starting - auto-initializing FHEVM SDK...');
         // Expose deployed addresses from env to window for public scripts
         (window as any).RESEARCH_AI_ADDRESS = process.env.REACT_APP_RESEARCH_AI_ADDRESS;
         (window as any).GM_TOKEN_ADDRESS = process.env.REACT_APP_GM_TOKEN_ADDRESS;
         (window as any).SWAP_ADDRESS = process.env.REACT_APP_SWAP_ADDRESS;
         const success = await autoInitializeFHEVM();
         if (success) {
-          console.log('✅ FHEVM SDK ready for use without wallet connection');
         } else {
-          console.log('⚠️ FHEVM SDK auto-initialization failed, will retry when wallet connects');
         }
       } catch (error) {
         console.error('❌ FHEVM auto-initialization error:', error);

@@ -101,7 +101,6 @@ export const useGMToken = () => {
 
     try {
       const [name, symbol, decimals, totalSupply] = await contract.getTokenInfo();
-      console.log('📋 Token Info:', { name, symbol, decimals, totalSupply });
     } catch (error) {
       console.error('Failed to load token info:', error);
     }
@@ -175,7 +174,6 @@ export const useGMToken = () => {
 
     setIsLoading(true);
     try {
-      console.log(`🔐 Confidential minting ${amount} GM tokens to ${to}...`);
       
       // Encrypt the amount
       const encryptedAmount = await encryptValue(amount, GMToken_ADDRESS, address);

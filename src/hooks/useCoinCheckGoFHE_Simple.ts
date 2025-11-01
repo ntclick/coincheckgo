@@ -116,7 +116,6 @@ const useCoinCheckGoFHESimple = () => {
         const cachedAddress = localStorage.getItem('wallet_address');
         
         if (cachedConnected === 'true' && cachedAddress && window.ethereum) {
-          console.log('🔄 Restoring wallet connection from cache...');
           
           // Check if MetaMask still has the same address
           const accounts = await window.ethereum.request({ method: 'eth_accounts' });
@@ -156,7 +155,6 @@ const useCoinCheckGoFHESimple = () => {
             // Load data after restoring wallet
             await loadDataWithContracts(gmToken, swap, research, userAddress);
             
-            console.log('✅ Wallet connection restored from cache');
           } else {
             // Address changed or no accounts, clear cache
             localStorage.removeItem('wallet_connected');
@@ -187,7 +185,6 @@ const useCoinCheckGoFHESimple = () => {
     const handleTokenBalancesUpdate = (event: any) => {
       const { public: publicBalance, confidential, gm } = event.detail;
 
-      console.log('🔄 Hook received token balance update:', {
         public: publicBalance,
         confidential: confidential,
         gm: gm
@@ -240,7 +237,6 @@ const useCoinCheckGoFHESimple = () => {
   // Connect wallet function - copied from reference file
   const connectWallet = async () => {
     try {
-      console.log('🔗 Connecting wallet...');
       
       if (!window.ethereum) {
         throw new Error('MetaMask not installed');
@@ -254,7 +250,6 @@ const useCoinCheckGoFHESimple = () => {
       const signer = await provider.getSigner();
       const userAddress = await signer.getAddress();
       
-      console.log('✅ Connected to account:', userAddress);
       
       // Create contract instances
       const gmToken = new ethers.Contract(GMToken_ADDRESS, GMToken_ABI, signer);
@@ -272,7 +267,6 @@ const useCoinCheckGoFHESimple = () => {
       try {
         localStorage.setItem('wallet_connected', 'true');
         localStorage.setItem('wallet_address', userAddress);
-        console.log('💾 Wallet connection cached to localStorage');
       } catch (err) {
         console.warn('⚠️ Failed to cache wallet connection:', err);
       }
@@ -303,21 +297,15 @@ const useCoinCheckGoFHESimple = () => {
       // Auto-trigger decryption after injected script is ready (only if not already triggered)
       if (!(window as any).decryptionTriggered) {
         (window as any).decryptionTriggered = true;
-        console.log('🔐 Auto-triggering decryption...');
         setTimeout(async () => {
           try {
             // Don't auto-trigger EIP-712 here, will trigger only after wallet connect
-            console.log('🔐 FHEVM ready, waiting for wallet connection to trigger decryption...');
-            console.log('✅ Auto-decryption triggered');
           } catch (error) {
-            console.log('⚠️ Auto-decryption failed:', error);
           }
         }, 2000);
       } else {
-        console.log('🔐 Decryption already triggered, skipping...');
       }
       
-      console.log('✅ Wallet connection successful');
       toast.success('Wallet connected successfully!');
       
     } catch (error: any) {
@@ -357,7 +345,6 @@ const useCoinCheckGoFHESimple = () => {
     try {
       localStorage.removeItem('wallet_connected');
       localStorage.removeItem('wallet_address');
-      console.log('💾 Wallet connection cache cleared');
     } catch (err) {
       console.warn('⚠️ Failed to clear wallet cache:', err);
     }
@@ -373,7 +360,6 @@ const useCoinCheckGoFHESimple = () => {
   // Initialize FHEVM
   const initializeFHEVM = async (provider: any) => {
     try {
-      console.log('🔐 Initializing FHEVM...');
       setFhevmLoading(true);
       
       // Wait for FHEVM to be available
@@ -387,7 +373,6 @@ const useCoinCheckGoFHESimple = () => {
         throw new Error('FHEVM not available');
       }
       
-      console.log('✅ FHEVM initialized');
       setFhevmInitialized(true);
       setAclPermissionsGranted(true);
       
@@ -403,21 +388,16 @@ const useCoinCheckGoFHESimple = () => {
   // Force decryption popup
   const forceDecryptionPopup = async (userAddress: string) => {
     try {
-      console.log('🔐 Force decryption popup for:', userAddress);
       
       if (!window.fhevm || !gmTokenContract) {
-        console.log('⚠️ FHEVM or contract not available');
              return;
            }
            
       // Load encrypted balance to trigger decryption popup
-      console.log('🔐 Loading encrypted balance to trigger decryption popup...');
       const encryptedBalance = await gmTokenContract?.confidentialBalanceOf(userAddress);
-      console.log('🔐 Encrypted balance loaded:', encryptedBalance);
       
       // Check if encrypted balance is valid
       if (encryptedBalance && encryptedBalance !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
-        console.log('🔐 Valid encrypted balance found, triggering decryption...');
         
         // Create EIP-712 signature for decryption
       const contractAddresses = [GMToken_ADDRESS];
@@ -432,7 +412,6 @@ const useCoinCheckGoFHESimple = () => {
             durationDays
           );
           
-          console.log('✅ EIP-712 signature created for decryption');
           
           // Decrypt the balance
           const keypair = await window.fhevm.generateKeypair();
@@ -452,29 +431,22 @@ const useCoinCheckGoFHESimple = () => {
             durationDays,
           );
           
-          console.log('✅ Decryption result:', result);
           
           if (result && result.length > 0) {
             const decryptedValue = result[0].balance;
             if (typeof decryptedValue === 'number') {
               setUserDecryptedBalance(decryptedValue);
-              console.log('✅ Decrypted balance updated:', decryptedValue);
             } else {
-              console.log('ℹ️ Balance is 0 - setting to 0');
             setUserDecryptedBalance(0);
           }
           }
           
         } catch (decryptError: any) {
-          console.log('⚠️ Decryption failed:', decryptError.message);
           if (decryptError.message.includes('relayer respond with HTTP code 500')) {
-            console.log('🔧 Relayer error detected - this is expected in development');
-            console.log('💡 Confidential balance exists but cannot be decrypted due to relayer issues');
           }
           setUserDecryptedBalance(0);
         }
       } else {
-        console.log('ℹ️ No encrypted balance found or balance is 0');
         setUserDecryptedBalance(0);
       }
       
@@ -486,7 +458,6 @@ const useCoinCheckGoFHESimple = () => {
 
   // Load data with contracts
   const loadDataWithContracts = async (gmContract: any, swapContract: any, researchContract: any, userAddress: string, forceReload: boolean = false) => {
-    console.log('📊 loadDataWithContracts called with swapContract:', !!swapContract);
     try {
       // Verify contract is deployed (use contract's provider or BrowserProvider)
       try {
@@ -502,7 +473,6 @@ const useCoinCheckGoFHESimple = () => {
             console.error('❌ GM Token contract not deployed at address:', gmContract.target);
             return;
           }
-          console.log('✅ GM Token contract verified at:', gmContract.target);
         }
       } catch (error) {
         console.error('❌ Failed to verify contract deployment:', error);
@@ -525,13 +495,11 @@ const useCoinCheckGoFHESimple = () => {
         try {
           const encryptedBalance = await gmContract.confidentialBalanceOf(userAddress);
           setUserEncryptedBalance(encryptedBalance);
-          console.log(`🔐 Encrypted Balance: ${encryptedBalance}`);
         } catch (error: any) {
           console.warn('⚠️ Failed to load confidential balance:', error.message);
           setUserEncryptedBalance('');
         }
       } else {
-        console.log('⚠️ FHEVM not initialized, skipping confidential balance');
         setUserEncryptedBalance('');
       }
       
@@ -543,18 +511,14 @@ const useCoinCheckGoFHESimple = () => {
         globalHookState.userPublicBalance = publicBalanceFormatted;
         notifyGlobalStateChange(); // Notify all listeners
       } catch (balanceError) {
-        console.log('⚠️ Failed to load public balance, using default 0');
         setUserPublicBalance(0);
         globalHookState.userPublicBalance = 0;
         notifyGlobalStateChange(); // Notify all listeners
       }
       
       // Load pool balances
-      console.log('📊 Loading pool balances...');
       const poolBalancesData = await getPoolBalancesWithContract(swapContract);
-      console.log('📊 Pool balances loaded:', poolBalancesData);
       setPoolBalances(poolBalancesData);
-      console.log('✅ Pool balances state updated');
       
       // Debug log removed
     } catch (error: any) {
@@ -567,22 +531,17 @@ const useCoinCheckGoFHESimple = () => {
     // Debug log removed
     // Debug log removed
     if (!contract) {
-      console.log('⚠️ No contract available, returning default 0');
       return { ethPool: 0, gmTokenPool: 0 };
     }
 
     try {
       // Try getReserves first (from reference file)
       try {
-        console.log('🔄 Trying getReserves()...');
         const reserves = await contract.getReserves();
-        console.log('📊 getReserves() result:', reserves);
         const ethPool = Number(ethers.formatEther(reserves[0]));
         const gmTokenPool = Number(ethers.formatEther(reserves[1]));
-        console.log('✅ Pool balances loaded:', { ethPool, gmTokenPool });
         return { ethPool, gmTokenPool };
       } catch (getReservesError: any) {
-        console.log('⚠️ getReserves() failed:', getReservesError.message);
       }
 
       // Try getPoolBalances second
@@ -595,7 +554,6 @@ const useCoinCheckGoFHESimple = () => {
         // Debug log removed
         return { ethPool, gmTokenPool };
       } catch (getPoolError: any) {
-        console.log('⚠️ getPoolBalances() failed:', getPoolError.message);
         // Debug log removed
       }
 
@@ -604,25 +562,15 @@ const useCoinCheckGoFHESimple = () => {
       let gmTokenPool = 0;
       
       try {
-        console.log('🔄 Trying totalETHReserve()...');
         const ethPoolResult = await contract.totalETHReserve();
-        console.log('📊 totalETHReserve() result:', ethPoolResult);
         ethPool = Number(ethers.formatEther(ethPoolResult));
-        console.log('💰 ETH Pool balance:', ethPool, 'ETH');
       } catch (ethError: any) {
-        console.log('⚠️ totalETHReserve() failed:', ethError.message);
-        console.log('⚠️ Using default 0 for ETH pool');
       }
 
       try {
-        console.log('🔄 Trying totalGMReserve()...');
         const gmTokenPoolResult = await contract.totalGMReserve();
-        console.log('📊 totalGMReserve() result:', gmTokenPoolResult);
         gmTokenPool = Number(ethers.formatEther(gmTokenPoolResult));
-        console.log('💰 GM Token Pool balance:', gmTokenPool, 'GM');
       } catch (gmError: any) {
-        console.log('⚠️ totalGMReserve() failed:', gmError.message);
-        console.log('⚠️ Using default 0 for GM pool');
       }
       
       return { ethPool, gmTokenPool };
@@ -646,7 +594,6 @@ const useCoinCheckGoFHESimple = () => {
 
     setIsLoading(true);
     try {
-      console.log('📅 Performing daily check-in...');
       
       // Check if user can check-in today
       const canCheckIn = await researchContract.canCheckInToday(address);
@@ -657,7 +604,6 @@ const useCoinCheckGoFHESimple = () => {
 
       // Get check-in reward amount
       const reward = await researchContract.getCheckInReward();
-      console.log(`💰 Check-in reward: ${ethers.formatEther(reward)} GM`);
       
       // Create signer-based contract for write operations
       const provider = new ethers.BrowserProvider(window.ethereum);
@@ -666,19 +612,16 @@ const useCoinCheckGoFHESimple = () => {
       
       // Perform check-in
       const tx = await researchContractWithSigner.dailyCheckIn();
-      console.log('📝 Check-in transaction:', tx.hash);
       
       toast.success('⏳ Check-in transaction submitted...');
       
       // Wait for transaction confirmation
       await tx.wait();
-      console.log('✅ Check-in transaction confirmed');
       
       toast.success(`✅ Daily check-in completed! +${ethers.formatEther(reward)} GM tokens`);
       
       // Reload balance after check-in
       setTimeout(() => {
-        console.log('🔄 Reloading balance after check-in...');
         loadDataWithContracts(gmTokenContract!, swapContract!, researchContract!, address, true);
       }, 2000);
       
@@ -695,10 +638,8 @@ const useCoinCheckGoFHESimple = () => {
 
   // Research function with FHE EIP-712 signature
   const performResearch = async (researchType: number = 1) => {
-    console.log('🔬 performResearch called with type:', researchType);
 
     if (!researchContract || !isConnected || !address) {
-      console.log('❌ Research prerequisites failed:', { researchContract: !!researchContract, isConnected, address });
       // Try recover from window to avoid blocking
       const winResearch = (window as any).researchContract;
       if (winResearch) {
@@ -708,31 +649,24 @@ const useCoinCheckGoFHESimple = () => {
     }
 
     if (isResearching) {
-      console.log('❌ Research already in progress');
       toast.error('Research already in progress...');
       return null;
     }
 
     setIsResearching(true);
-    console.log('✅ Research started, isResearching set to true');
 
     try {
-      console.log(`🔬 Starting FHE research type ${researchType}...`);
 
       // Get research cost from contract (fallback to 10 GM if getter missing)
       let cost: bigint;
       try {
         cost = await researchContract.getResearchCost();
       } catch (_) {
-        console.log('ℹ️ getResearchCost() missing on contract, using default 10 GM');
         cost = ethers.parseEther('10');
       }
       const costFormatted = parseFloat(ethers.formatEther(cost));
-      console.log(`💰 Research cost: ${costFormatted} GM tokens`);
       
       // No frontend balance check - let contract validate on-chain
-      console.log('📝 Proceeding with research - contract will validate balance on-chain');
-      console.log('🔐 Skipping EIP-712 signature - sending FHE transaction directly...');
 
       // Create signer-based contract for write operations
       const provider = new ethers.BrowserProvider(window.ethereum);
@@ -741,18 +675,14 @@ const useCoinCheckGoFHESimple = () => {
       // Ensure gmTokenContract is available (recover from window or create new instance)
       let gmTokenContractToUse = gmTokenContract;
       if (!gmTokenContractToUse) {
-        console.log('⚠️ gmTokenContract is null, trying to recover from window...');
         const winGmToken = (window as any).gmTokenContract;
         if (winGmToken) {
           gmTokenContractToUse = winGmToken;
-          console.log('✅ Recovered gmTokenContract from window');
         } else {
           // Create new instance if not available
-          console.log('🔧 Creating new gmTokenContract instance...');
           gmTokenContractToUse = new ethers.Contract(GMToken_ADDRESS, GMToken_ABI, signer);
           setGmTokenContract(gmTokenContractToUse);
           (window as any).gmTokenContract = gmTokenContractToUse;
-          console.log('✅ Created new gmTokenContract instance');
         }
       }
 
@@ -785,7 +715,6 @@ const useCoinCheckGoFHESimple = () => {
 
       const researchContractWithSigner = new ethers.Contract(Research_ADDRESS, Research_ABI, signer);
 
-      console.log('📝 Submitting research transaction...');
       toast('⏳ Submitting research transaction to blockchain...', { duration: 3000 });
 
       // Perform research with topic - using FHE flow
@@ -796,19 +725,16 @@ const useCoinCheckGoFHESimple = () => {
       let tx;
       
       try {
-        console.log('🔐 Using FHE flow for research transaction (required by contract)...');
         
         // Ensure FHEVM is available with createEncryptedInput method
         let fhevmReady = (window as any).fhevm && typeof (window as any).fhevm.createEncryptedInput === 'function';
         
         if (!fhevmReady) {
-          console.log('⏳ Waiting for FHEVM to be ready...');
           // Wait up to 5 seconds for FHEVM
           for (let i = 0; i < 10; i++) {
             await new Promise(r => setTimeout(r, 500));
             fhevmReady = (window as any).fhevm && typeof (window as any).fhevm.createEncryptedInput === 'function';
             if (fhevmReady) {
-              console.log('✅ FHEVM is now ready');
               break;
             }
           }
@@ -826,11 +752,6 @@ const useCoinCheckGoFHESimple = () => {
         
         // Convert cost from wei to GM units for encryption
         const costInGM = Number(cost / BigInt(10**18));
-        console.log(`🔐 Encrypting cost: ${costInGM} GM`);
-        console.log(`🔐 Contract address: ${contractAddress}`);
-        console.log(`🔐 User address: ${userAddressChecksum}`);
-        console.log(`🔐 FHEVM instance available:`, !!(window as any).fhevm);
-        console.log(`🔐 FHEVM createEncryptedInput:`, typeof (window as any).fhevm?.createEncryptedInput);
         
         // Encrypt cost value with proof
         const { handle: encryptedCostHandle, inputProof } = await encryptValueWithProof(
@@ -839,8 +760,6 @@ const useCoinCheckGoFHESimple = () => {
           userAddressChecksum
         );
         
-        console.log('🔐 Encrypted cost handle:', encryptedCostHandle);
-        console.log('🔐 Input proof length:', inputProof?.length || 0);
         
         // Call FHE version with encrypted cost (contract REQUIRES this)
         tx = await researchContractWithSigner.performAIResearchFHE(
@@ -850,21 +769,17 @@ const useCoinCheckGoFHESimple = () => {
           inputProof // inputProof (bytes)
         );
         
-        console.log('✅ FHE research transaction submitted');
       } catch (fheError: any) {
         console.error('❌ FHE encryption/transaction failed:', fheError);
         toast.error(`❌ FHE research failed: ${fheError.message}. Please ensure FHEVM is initialized.`);
         throw fheError; // Don't fallback - contract requires FHE flow
       }
 
-      console.log('📤 Research transaction sent:', tx.hash);
       toast('📤 Research transaction submitted - waiting for confirmation...', { duration: 3000 });
 
       // Wait for transaction confirmation
-      console.log('⏳ Waiting for on-chain confirmation...');
       const receipt = await tx.wait();
 
-      console.log('✅ Research transaction confirmed on-chain!');
       
       // Show "receiving results" message
       toast('📊 Receiving results... Please wait.', { duration: 8000 });
@@ -876,7 +791,6 @@ const useCoinCheckGoFHESimple = () => {
 
       // Load balance once after transaction (only reload, no page refresh)
       setTimeout(() => {
-        console.log('🔄 Reloading balance after research...');
         if ((window as any).loadTokenBalances) {
           (window as any).loadTokenBalances();
         }
@@ -898,20 +812,16 @@ const useCoinCheckGoFHESimple = () => {
 
       if (error.code === 4001 || error.message?.includes('rejected')) {
         toast.error('❌ Research cancelled - signature rejected');
-        console.log('🔐 User rejected EIP-712 signature for research');
       } else if (error.message?.includes('allowance') || error.reason?.includes('allowance')) {
         // Contract rejected due to insufficient allowance
         toast.error('❌ Insufficient token allowance - approval required. Please try again.');
-        console.log('🔑 Contract rejected: Insufficient allowance');
       } else if (error.message?.includes('insufficient') || error.message?.includes('Insufficient')) {
         // Contract rejected due to insufficient balance on-chain
         toast.error('❌ Insufficient GM tokens - please swap ETH to GM first');
-        console.log('💰 Contract rejected: Insufficient balance for research');
       } else {
         // Show contract error message
         const errorMsg = error.reason || error.shortMessage || error.message || 'Unknown error';
         toast.error(`❌ Research failed: ${errorMsg}`);
-        console.log('💥 Research failed:', error.message);
       }
 
       return null;
@@ -934,7 +844,6 @@ const useCoinCheckGoFHESimple = () => {
 
     setIsLoading(true);
     try {
-      console.log(`💰 Funding research pool with ${amount} GM tokens...`);
       
       // Check if user has enough balance
       if (userPublicBalance < amount) {
@@ -947,10 +856,8 @@ const useCoinCheckGoFHESimple = () => {
       const allowanceFormatted = parseFloat(ethers.formatEther(allowance));
       
       if (allowanceFormatted < amount) {
-        console.log(`🔐 Approving ${amount} GM for research pool funding...`);
         const approveTx = await gmTokenContract.approve(Research_ADDRESS, ethers.parseEther(amount.toString()));
         await approveTx.wait();
-        console.log('✅ Approval successful for research pool funding');
       }
       
       // Fund the research pool
@@ -959,19 +866,16 @@ const useCoinCheckGoFHESimple = () => {
       const researchContractWithSigner = new ethers.Contract(Research_ADDRESS, Research_ABI, signer);
       
       const tx = await researchContractWithSigner.fundPool(ethers.parseEther(amount.toString()));
-      console.log('📝 Fund research pool transaction:', tx.hash);
       
       toast.success('⏳ Funding transaction submitted...');
       
       // Wait for transaction confirmation
         await tx.wait();
-      console.log('✅ Funding transaction confirmed');
       
       toast.success(`✅ Research pool funded with ${amount} GM tokens!`);
       
       // Reload balance after funding
       setTimeout(() => {
-        console.log('🔄 Reloading balance after funding...');
         loadDataWithContracts(gmTokenContract!, swapContract!, researchContract!, address, true);
         }, 2000);
       

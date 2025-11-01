@@ -104,7 +104,6 @@ export class TaapiClient {
     // If we've hit the rate limit, wait
     if (this.callCount >= this.config.rateLimitPerMinute!) {
       const waitTime = 60000 - (now - this.lastResetTime);
-      console.log(`Rate limit reached, waiting ${waitTime}ms`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
       this.callCount = 0;
       this.lastResetTime = Date.now();
@@ -119,7 +118,6 @@ export class TaapiClient {
     }
 
     const delay = this.config.retryDelay! * Math.pow(2, attempt - 1);
-    console.log(`Retrying request in ${delay}ms (attempt ${attempt})`);
     
     await new Promise(resolve => setTimeout(resolve, delay));
     
@@ -160,7 +158,6 @@ export class TaapiClient {
     const cacheKey = this.getCacheKey('indicator', { indicator, symbol, interval, params });
     const cached = this.getFromCache(cacheKey);
     if (cached) {
-      console.log(`Cache hit for ${indicator} on ${symbol}`);
       return cached;
     }
 
@@ -192,7 +189,6 @@ export class TaapiClient {
     const cacheKey = this.getCacheKey('candles', { symbol, interval, limit });
     const cached = this.getFromCache(cacheKey);
     if (cached) {
-      console.log(`Cache hit for candles on ${symbol}`);
       return cached;
     }
 
