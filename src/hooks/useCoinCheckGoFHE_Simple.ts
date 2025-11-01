@@ -185,11 +185,6 @@ const useCoinCheckGoFHESimple = () => {
     const handleTokenBalancesUpdate = (event: any) => {
       const { public: publicBalance, confidential, gm } = event.detail;
 
-        public: publicBalance,
-        confidential: confidential,
-        gm: gm
-      });
-
       // Update userPublicBalance state
       if (publicBalance !== undefined) {
         setUserPublicBalance(publicBalance);

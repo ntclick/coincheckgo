@@ -483,8 +483,6 @@
                                             durationDays,
                                         );
                                         
-                                            typeof value === 'bigint' ? value.toString() : value, 2));
-                                        
                                         // Try different ways to access the decrypted balance
                                         let decryptedBalance = null;
                                         if (result && result[0] && result[0].balance) {
@@ -519,43 +517,43 @@
                                             }
                                         }
                                         
-                                // Get current public balances before updating UI
-                                let currentEthBalance = '0.00';
-                                let currentPublicBalance = '0.00';
-                                try {
-                                    const ethBalanceRaw = await window.ethereum.request({
-                                        method: 'eth_getBalance',
-                                        params: [userAddress, 'latest']
-                                    });
-                                    currentEthBalance = ethers.utils.formatEther(ethBalanceRaw);
+                                        // Get current public balances before updating UI
+                                        let currentEthBalance = '0.00';
+                                        let currentPublicBalance = '0.00';
+                                        try {
+                                            const ethBalanceRaw = await window.ethereum.request({
+                                                method: 'eth_getBalance',
+                                                params: [userAddress, 'latest']
+                                            });
+                                            currentEthBalance = ethers.utils.formatEther(ethBalanceRaw);
 
-                                    const publicBalanceRaw = await tokenContract.balanceOf(userAddress);
-                                    currentPublicBalance = ethers.utils.formatEther(publicBalanceRaw);
-                                } catch (balanceError) {
-                                    // Use fallback values
-                                    currentEthBalance = window.globalHookState?.ethBalance || '0.00';
-                                    currentPublicBalance = window.globalHookState?.userPublicBalance || '0.00';
-                                }
+                                            const publicBalanceRaw = await tokenContract.balanceOf(userAddress);
+                                            currentPublicBalance = ethers.utils.formatEther(publicBalanceRaw);
+                                        } catch (balanceError) {
+                                            // Use fallback values
+                                            currentEthBalance = window.globalHookState?.ethBalance || '0.00';
+                                            currentPublicBalance = window.globalHookState?.userPublicBalance || '0.00';
+                                        }
 
-                                if (decryptedBalance) {
-                                    // Update both public and confidential balances
-                                    window.userConfidentialBalance = decryptedBalance;
-                                    updateTokenBalancesUI({
-                                        ethBalance: currentEthBalance,
-                                        gmBalance: currentPublicBalance,
-                                        publicBalance: currentPublicBalance,
-                                        confidentialBalance: decryptedBalance
-                                    });
-                                } else {
-                                    // Update with current public balances, confidential = 0.00
-                                    window.userConfidentialBalance = '0.00';
-                                    updateTokenBalancesUI({
-                                        ethBalance: currentEthBalance,
-                                        gmBalance: currentPublicBalance,
-                                        publicBalance: currentPublicBalance,
-                                        confidentialBalance: '0.00'
-                                    });
-                                }
+                                        if (decryptedBalance) {
+                                            // Update both public and confidential balances
+                                            window.userConfidentialBalance = decryptedBalance;
+                                            updateTokenBalancesUI({
+                                                ethBalance: currentEthBalance,
+                                                gmBalance: currentPublicBalance,
+                                                publicBalance: currentPublicBalance,
+                                                confidentialBalance: decryptedBalance
+                                            });
+                                        } else {
+                                            // Update with current public balances, confidential = 0.00
+                                            window.userConfidentialBalance = '0.00';
+                                            updateTokenBalancesUI({
+                                                ethBalance: currentEthBalance,
+                                                gmBalance: currentPublicBalance,
+                                                publicBalance: currentPublicBalance,
+                                                confidentialBalance: '0.00'
+                                            });
+                                        }
                                         
                                         // Reset flags after successful decryption
                                         window.walletJustConnected = false;
@@ -691,12 +689,6 @@
                     
                     gmBalanceInfoElement.textContent = infoText;
                 }
-
-                    eth: balances.ethBalance,
-                    gm: balances.gmBalance,
-                    public: balances.publicBalance,
-                    confidential: balances.confidentialBalance
-                });
                 
                 // Trigger React component update by dispatching custom event
                 window.dispatchEvent(new CustomEvent('tokenBalancesUpdated', {
@@ -842,8 +834,6 @@
                     startTimeStamp,
                     durationDays,
                 );
-
-                    typeof value === 'bigint' ? value.toString() : value, 2));
                 
                 // Try different ways to access the decrypted balance
                 let decryptedBalance = null;
