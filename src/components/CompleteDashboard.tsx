@@ -52,6 +52,7 @@ export const CompleteDashboard: React.FC = () => {
   const [marketList, setMarketList] = useState<any[]>([]);
   const [isLoadingMarket, setIsLoadingMarket] = useState(false);
   const [marketPage, setMarketPage] = useState(0); // pagination for MarketCap
+  const [loadingToastId, setLoadingToastId] = useState<string | null>(null); // Track loading toast ID
   
   const [currentPage, setCurrentPage] = useState('home');
 
@@ -499,6 +500,12 @@ export const CompleteDashboard: React.FC = () => {
     };
 
     const handleTransactionSuccess = (event: any) => {
+      // Dismiss loading toast if exists
+      if (loadingToastId) {
+        toast.dismiss(loadingToastId);
+        setLoadingToastId(null);
+      }
+      
       // Show success notification to user
       toast.success(`✅ Transaction ${event.detail?.type || 'completed'} successful!`);
       
@@ -520,7 +527,7 @@ export const CompleteDashboard: React.FC = () => {
       window.removeEventListener('tokenBalancesUpdated', handleTokenBalancesUpdate);
       window.removeEventListener('transactionSuccess', handleTransactionSuccess);
     };
-  }, [isConnected]);
+  }, [isConnected, loadingToastId]);
 
   // Load MarketCap data when navigating to tab
   useEffect(() => {
@@ -912,14 +919,16 @@ export const CompleteDashboard: React.FC = () => {
                           // Trigger swap based on direction
                         if (swapDirection === 'ETH_TO_GM') {
                           if (window.swapETHForGM) {
-                            toast.loading(`💱 Swapping ${fromAmount} ETH for GM...`);
+                            const toastId = toast.loading(`💱 Swapping ${fromAmount} ETH for GM...`);
+                            setLoadingToastId(toastId);
                             window.swapETHForGM(fromAmount);
                           } else {
                             toast.error('⚠️ Function not available');
                           }
                         } else {
                           if (window.swapGMForETH) {
-                            toast.loading(`🔐 Swapping ${fromAmount} GM for ETH...`);
+                            const toastId = toast.loading(`🔐 Swapping ${fromAmount} GM for ETH...`);
+                            setLoadingToastId(toastId);
                             window.swapGMForETH(fromAmount);
                           } else {
                             toast.error('⚠️ Function not available');
@@ -1004,10 +1013,12 @@ export const CompleteDashboard: React.FC = () => {
                       }}
                       onClick={() => {
                         if (window.addLiquidityWithAmounts) {
-                          toast.loading(`🏊 Adding ${liquidityETH} ETH + ${liquidityGM} GM liquidity...`);
+                          const toastId = toast.loading(`🏊 Adding ${liquidityETH} ETH + ${liquidityGM} GM liquidity...`);
+                          setLoadingToastId(toastId);
                           window.addLiquidityWithAmounts(liquidityETH, liquidityGM);
                         } else if (window.addLiquidity) {
-                          toast.loading('🏊 Adding liquidity...');
+                          const toastId = toast.loading('🏊 Adding liquidity...');
+                          setLoadingToastId(toastId);
                           window.addLiquidity();
                         } else {
                           toast.error('⚠️ Function not available');
@@ -1464,14 +1475,16 @@ export const CompleteDashboard: React.FC = () => {
                           // Trigger swap based on direction
                         if (swapDirection === 'ETH_TO_GM') {
                           if (window.swapETHForGM) {
-                            toast.loading('💱 Swapping ETH for GM...');
+                            const toastId = toast.loading('💱 Swapping ETH for GM...');
+                            setLoadingToastId(toastId);
                             window.swapETHForGM();
                           } else {
                             toast.error('⚠️ Function not available');
                           }
                         } else {
                           if (window.swapGMForETH) {
-                            toast.loading('🔐 Swapping GM for ETH...');
+                            const toastId = toast.loading('🔐 Swapping GM for ETH...');
+                            setLoadingToastId(toastId);
                             window.swapGMForETH();
                           } else {
                             toast.error('⚠️ Function not available');
@@ -1514,9 +1527,8 @@ export const CompleteDashboard: React.FC = () => {
               <div className="news-filters">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
                   <h3 style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '16px', margin: 0 }}>
-                    Showing {getFilteredNews().length} of {getFilteredNewsCount()} articles
                     {Object.keys(feedStats).length > 0 && (
-                      <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', marginLeft: '8px' }}>
+                      <span style={{ fontSize: '14px' }}>
                         (Total: {Object.values(feedStats).reduce((sum, count) => sum + count, 0)} from feeds)
                               </span>
                     )}
@@ -1644,7 +1656,7 @@ export const CompleteDashboard: React.FC = () => {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', marginBottom: '100px' }}>
                 <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
-                  Page {newsPage + 1} of {getTotalNewsPages()}
+                  Showing {getPaginatedNews().length} of {getPaginatedNews().length} articles (Total: {getFilteredNewsCount()} articles)
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button 
