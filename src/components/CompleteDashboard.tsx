@@ -676,32 +676,6 @@ export const CompleteDashboard: React.FC = () => {
                     <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)' }}>Only you can decrypt with your private key</div>
                     </div>
 
-                  {/* Mint GM Tokens Button */}
-                  <button
-                    className="modern-btn"
-                    style={{ 
-                      width: '100%',
-                      fontSize: '14px',
-                      padding: '10px',
-                      background: 'linear-gradient(135deg, rgb(0, 212, 255), rgb(157, 78, 221))',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold',
-                      marginTop: '12px'
-                    }}
-                    onClick={() => {
-                      if (window.loadGMTokens) {
-                        toast.loading('🪙 Minting 100 GM tokens...');
-                        window.loadGMTokens(100);
-                      } else {
-                        toast.error('⚠️ Function not available');
-                      }
-                    }}
-                  >
-                    🪙 Mint 100 GM Tokens (Confidential)
-                  </button>
-                  
                 </div>
               </div>
 
