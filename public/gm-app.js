@@ -4,7 +4,7 @@ window.addEventListener('load', () => {
   // BEGIN MOVED SCRIPT
   // Contract addresses (LATEST deployment - 2025-10-26) - From deployment-hybrid.json
   const TOKEN_ADDRESS = window.GM_TOKEN_ADDRESS || '0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08';
-  const SWAP_ADDRESS = window.SWAP_ADDRESS || '0x438A2ce1B563E71b68F2f0EE0575736CccF3231e';
+  const SWAP_ADDRESS = window.SWAP_ADDRESS || '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A';
   const RESEARCH_AI_ADDRESS = window.RESEARCH_AI_ADDRESS || '0xBD341699753FEa3305bf16Eaf8228A1F96E945fF';
 
   let provider, signer, userAddress, fhevm;

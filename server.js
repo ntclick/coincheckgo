@@ -15,35 +15,37 @@ app.use((req, res, next) => {
   next();
 });
 
-// Simple CoinGecko proxy for local development
-app.get('/api/cg/*', async (req, res) => {
-  try {
-    const apiBase = 'https://api.coingecko.com/api/v3';
-    const pathWithQuery = req.originalUrl.replace('/api/cg', '');
+// Simple CoinGecko proxy for local development  
+app.use('/api/cg', (req, res, next) => {
+  (async () => {
+    try {
+      const apiBase = 'https://api.coingecko.com/api/v3';
+      const pathWithQuery = req.originalUrl.replace('/api/cg', '');
 
-    const targetUrl = apiBase + pathWithQuery;
+      const targetUrl = apiBase + pathWithQuery;
 
-    const headers = {
-      'accept': 'application/json'
-    };
+      const headers = {
+        'accept': 'application/json'
+      };
 
-    // Add API key if available
-    const apiKey = process.env.REACT_APP_COINCHECKGO_API_KEY || process.env.CG_API_KEY;
-    if (apiKey) {
-      headers['x-cg-demo-api-key'] = apiKey;
+      // Add API key if available
+      const apiKey = process.env.REACT_APP_COINCHECKGO_API_KEY || process.env.CG_API_KEY;
+      if (apiKey) {
+        headers['x-cg-demo-api-key'] = apiKey;
+      }
+
+      const response = await fetch(targetUrl, { headers });
+      const data = await response.text();
+
+      res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.status(response.status).send(data);
+
+    } catch (error) {
+      console.error('CoinGecko proxy error:', error);
+      res.status(500).json({ error: 'CoinGecko proxy failed', message: error.message });
     }
-
-    const response = await fetch(targetUrl, { headers });
-    const data = await response.text();
-
-    res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.status(response.status).send(data);
-
-  } catch (error) {
-    console.error('CoinGecko proxy error:', error);
-    res.status(500).json({ error: 'CoinGecko proxy failed', message: error.message });
-  }
+  })();
 });
 
 // Handle React routing, return all requests to React app

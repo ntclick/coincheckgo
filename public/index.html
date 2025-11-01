@@ -8,8 +8,6 @@
       name="description"
       content="Coincheckgo - AI Research Tools FHE. Confidential swaps, daily check-in, live market data."
     />
-    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
-    <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
     <title>Coincheckgo - AI Research Tools FHE</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%2300d4ff'/%3E%3Ctext x='32' y='40' font-size='28' text-anchor='middle' fill='%23003344' font-family='Segoe UI, Tahoma, Geneva, Verdana, sans-serif'%3EG%3C/text%3E%3C/svg%3E" />
     <style>
@@ -17,26 +15,6 @@
       body { margin: 0; background: #0b0f1a; color: #ffffff; }
       .modern-dashboard { min-height: 100%; }
     </style>
-    
-    <!-- Load FHEVM SDK ESM CDN -->
-    <script type="module" defer>
-      try {
-        console.log('🔐 Loading FHEVM SDK ESM CDN...');
-        const { initSDK, createInstance, SepoliaConfig } = await import('https://cdn.zama.ai/relayer-sdk-js/0.2.0/relayer-sdk-js.js');
-        
-        // Make available globally
-        window.initSDK = initSDK;
-        window.createInstance = createInstance;
-        window.SepoliaConfig = SepoliaConfig;
-        
-        console.log('✅ FHEVM SDK ESM CDN loaded successfully');
-        console.log('window.initSDK:', typeof window.initSDK);
-        console.log('window.createInstance:', typeof window.createInstance);
-        console.log('window.SepoliaConfig:', typeof window.SepoliaConfig);
-      } catch (error) {
-        console.error('❌ FHEVM SDK ESM CDN failed:', error);
-      }
-    </script>
     
     <!-- Ethers.js for contract interaction -->
     <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
@@ -51,7 +29,7 @@
         // Lightweight boot log only
         // Contract addresses (LATEST deployment - 2025-10-26) - From deployment-hybrid.json
         const TOKEN_ADDRESS = window.GM_TOKEN_ADDRESS || '0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08';
-        const SWAP_ADDRESS = window.SWAP_ADDRESS || '0x438A2ce1B563E71b68F2f0EE0575736CccF3231e';
+        const SWAP_ADDRESS = window.SWAP_ADDRESS || '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A';
         const RESEARCH_AI_ADDRESS = window.RESEARCH_AI_ADDRESS || '0xBD341699753FEa3305bf16Eaf8228A1F96E945fF';
 
     // Global variables
@@ -147,7 +125,7 @@
             "function setSwapAsOperator()",
             "function swapETHForGM() payable",
             "function swapETHForGMPublic() payable",
-            "function swapGMForETH(bytes32,bytes) payable",
+            "function swapGMForETH(bytes32,bytes,uint256) payable",
             "function swapGMForETHPublic(uint256)",
             "function totalETHReserve() view returns (uint256)",
             "function totalGMReserve() view returns (uint256)",
@@ -276,6 +254,13 @@
                 await tx.wait();
                 console.log('✅ GM tokens minted successfully');
 
+                // Reset EIP712 flag to allow re-decryption with new handle
+                eip712Signed = false;
+                window.userRequestedDecryption = true; // Set flag to trigger decryption
+                console.log('🔄 Reset eip712Signed flag to decrypt new handle');
+                console.log('🔍 Debug - window.fhevm available:', !!window.fhevm);
+                console.log('🔍 Debug - window.userRequestedDecryption:', window.userRequestedDecryption);
+
                 // Refresh token balances UI
                 await loadTokenBalances();
                 return true;
@@ -285,7 +270,7 @@
             }
         }
 
-        // Swap ETH → GM (Public)
+        // Swap ETH → GM (Hybrid - mints both public and confidential tokens)
         async function swapETHForGM(ethAmount = "0.001") {
             try {
                 if (!swapContract) {
@@ -312,15 +297,30 @@
                     console.log('✅ Pool initialized');
                 }
 
-                // Execute swap
-                const swapTx = await swapContract.swapETHForGMPublic({ value: ethAmountWei });
+                // Execute swap (Hybrid - mints both public and confidential tokens)
+                const swapTx = await swapContract.swapETHForGM({ value: ethAmountWei });
                 await swapTx.wait();
-                console.log('✅ ETH → GM swap successful');
+                console.log('✅ ETH → GM swap successful (Hybrid)');
+
+                // Reset EIP712 flag to allow re-decryption with new handle
+                eip712Signed = false;
+                window.userRequestedDecryption = true; // Set flag to trigger decryption
+                console.log('🔄 Reset eip712Signed flag to decrypt new handle');
+                console.log('🔍 Debug - window.fhevm available:', !!window.fhevm);
+                console.log('🔍 Debug - window.fhevm.userDecrypt available:', !!(window.fhevm && window.fhevm.userDecrypt));
+                console.log('🔍 Debug - window.userRequestedDecryption:', window.userRequestedDecryption);
 
                 // Dispatch transaction success event
                 window.dispatchEvent(new CustomEvent('transactionSuccess', {
                     detail: { type: 'swapETHToGM', amount: ethAmount }
                 }));
+
+                // Wait a bit for blockchain state to update
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                console.log('⏱️ Waited 2s for blockchain state update');
+
+                // Refresh token balances UI to decrypt new confidential handle
+                await loadTokenBalances();
 
                 // Check new balance
                 const balance = await tokenContract.balanceOf(userAddress);
@@ -332,7 +332,7 @@
             }
         }
 
-        // Swap GM → ETH (FHE Confidential) - Using React app's FHEVM instance
+        // Swap GM → ETH (FHE) - Using React app's FHEVM instance
         async function swapGMForETH(gmAmount = 100) {
             try {
                 // Prevent double execution
@@ -346,7 +346,7 @@
                     throw new Error('Contracts not initialized');
                 }
 
-                console.log(`🔐 Swapping ${gmAmount} GM for ETH (FHE Confidential)...`);
+                console.log(`🔐 Swapping ${gmAmount} GM for ETH (FHE)...`);
                 console.log(`🔍 Debug - gmAmount type: ${typeof gmAmount}, value: ${gmAmount}`);
                 
                 // Use React app's FHEVM instance for encrypted input
@@ -381,17 +381,35 @@
                 const handleHex = arrayToHex(encrypted.handles[0]);
                 console.log(`🔒 Encrypted handle: ${handleHex}`);
 
-                // For hybrid token, confidential swap still needs approval for public balance
-                console.log('🔐 Hybrid token: confidential swap needs approval for public balance');
+                // FHE confidential transfer requires operator permissions
+                console.log('🔐 Checking operator permissions for FHE confidential transfer...');
+                const isOperator = await tokenContract.isOperator(userAddress, SWAP_ADDRESS);
+                console.log(`🔐 Is swap contract operator: ${isOperator}`);
                 
-                // Check allowance
+                if (!isOperator) {
+                    console.log('🔐 Setting swap contract as operator for FHE transfers...');
+                    // Set operator with maximum duration (type(uint48).max)
+                    const maxDuration = ethers.BigNumber.from('0xffffffffffff'); // type(uint48).max
+                    const setOperatorTx = await tokenContract.setOperator(SWAP_ADDRESS, maxDuration);
+                    await setOperatorTx.wait();
+                    console.log('✅ Operator permissions granted for FHE transfers');
+                    
+                    // Verify operator was set correctly
+                    const isOperatorAfter = await tokenContract.isOperator(userAddress, SWAP_ADDRESS);
+                    console.log(`🔐 Is operator after setting: ${isOperatorAfter}`);
+                    if (!isOperatorAfter) {
+                        throw new Error('Failed to set operator permissions');
+                    }
+                }
+                
+                // Also check/approve for hybrid token public balance (backup)
                 const allowance = await tokenContract.allowance(userAddress, SWAP_ADDRESS);
                 const allowanceFormatted = ethers.utils.formatEther(allowance);
                 console.log(`🔐 Current allowance: ${allowanceFormatted} GM`);
                 
-                // Approve if needed
+                // Approve if needed (for hybrid token public balance backup)
                 if (parseFloat(allowanceFormatted) < gmAmount) {
-                    console.log(`🔐 Approving ${gmAmount} GM for confidential swap...`);
+                    console.log(`🔐 Approving ${gmAmount} GM for hybrid token public balance...`);
                     
                     // Validate gmAmount to prevent extremely large approvals
                     if (gmAmount > 1000000) {
@@ -399,22 +417,14 @@
                     }
                     
                     const approvalAmount = ethers.utils.parseEther(gmAmount.toString());
-                    console.log(`🔍 Debug - Approval amount in Wei: ${approvalAmount.toString()}`);
-                    console.log(`🔍 Debug - Approval amount formatted: ${ethers.utils.formatEther(approvalAmount)} GM`);
-                    
-                    // Double check the approval amount is reasonable
-                    const approvalFormatted = ethers.utils.formatEther(approvalAmount);
-                    if (parseFloat(approvalFormatted) > 1000000) {
-                        throw new Error(`Approval amount too large: ${approvalFormatted} GM. This seems like a bug.`);
-                    }
-                    
                     const approveTx = await tokenContract.approve(SWAP_ADDRESS, approvalAmount);
                     await approveTx.wait();
-                    console.log('✅ Approval successful for confidential swap');
+                    console.log('✅ Approval successful');
                 }
 
-                // Execute confidential swap
-                const swapTx = await swapContract.swapGMForETH(handleHex, encrypted.inputProof);
+                // Execute confidential swap with public amount
+                const gmAmountWei = ethers.utils.parseEther(gmAmount.toString());
+                const swapTx = await swapContract.swapGMForETH(handleHex, encrypted.inputProof, gmAmountWei);
                 await swapTx.wait();
                 console.log('✅ GM → ETH confidential swap successful');
 
@@ -496,27 +506,22 @@
                                     const durationDays = "1";
                                     const contractAddresses = [TOKEN_ADDRESS];
 
+                                    console.log('🔐 Creating EIP-712 signature for decryption...');
+                                    console.log('🔐 MetaMask will show signature popup...');
+                                    
+                                    // Create EIP712 data structure
                                     const eip712 = window.fhevm.createEIP712(
                                         keypair.publicKey,
                                         contractAddresses,
                                         startTimeStamp,
                                         durationDays,
                                     );
-
-                                    console.log('🔐 Creating EIP-712 signature for decryption...');
-                                    console.log('🔐 MetaMask will show signature popup...');
                                     
-                                    // Auto-trigger EIP-712 signature for decryption after wallet connection
-                                    console.log('🔐 Auto-triggering EIP-712 signature for decryption...');
-                                    console.log('🔐 MetaMask will show signature popup for decryption...');
-
-                                    // Create EIP-712 signature for decryption
-                                    const signature = await window.fhevm.createEIP712(
-                                        ethers.utils.getAddress(userAddress),
-                                        contractAddresses,
-                                        startTimeStamp,
-                                        durationDays
-                                    );
+                                    // Request signature from MetaMask
+                                    const signature = await window.ethereum.request({
+                                        method: 'eth_signTypedData_v4',
+                                        params: [ethers.utils.getAddress(userAddress), JSON.stringify(eip712)],
+                                    });
                                     
                                     console.log('✅ EIP-712 signature created for decryption');
                                     eip712Signed = true; // Mark as signed to prevent spam
@@ -2089,7 +2094,7 @@
             console.log('  - initializeSwap() - Initialize wallet and contracts');
             console.log('  - loadGMTokens(amount) - Mint GM tokens to wallet');
             console.log('  - loadTokenBalances() - Load and display all token balances');
-            console.log('  - swapETHForGM(ethAmount) - Swap ETH → GM (Public)');
+            console.log('  - swapETHForGM(ethAmount) - Swap ETH → GM (Hybrid)');
             console.log('  - swapGMForETH(gmAmount) - Swap GM → ETH (FHE)');
             console.log('  - swapGMForETHPublic(gmAmount) - Swap GM → ETH (Public)');
             console.log('  - checkPoolStatus() - Check pool and balance status');

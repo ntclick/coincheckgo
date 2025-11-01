@@ -54,9 +54,9 @@ class CryptoApiService {
       const paramsBase: any = {
         vs_currency: 'usd',
         order: 'market_cap_desc',
-        per_page: Math.min(limit, 300),
+        per_page: Math.min(limit, 100), // Reduce to avoid 431 errors
         page: 1,
-        sparkline: true,
+        sparkline: false, // Disable to avoid 431 errors
         price_change_percentage: '24h,7d,30d'
       };
       let response = await axios.get(`${this.baseUrl}/coins/markets`, { params: paramsBase });
@@ -68,7 +68,7 @@ class CryptoApiService {
         const results = await Promise.all(
           pages.map((p) =>
             axios.get(`${this.baseUrl}/coins/markets`, {
-              params: { ...paramsBase, per_page: 100, page: p }
+              params: { ...paramsBase, per_page: 100, page: p, sparkline: false }
             }).then(r => r.data as CryptoData[]).catch(() => [])
           )
         );
@@ -87,7 +87,7 @@ class CryptoApiService {
           vs_currency: 'usd',
           order: 'market_cap_desc',
           per_page: 100,
-          sparkline: true,
+          sparkline: false, // Disable to avoid 431 errors
           price_change_percentage: '24h,7d,30d'
         };
         const pages = [1, 2, 3];
@@ -124,7 +124,7 @@ class CryptoApiService {
           market_data: true,
           community_data: false,
           developer_data: false,
-          sparkline: true
+          sparkline: false // Disable to avoid 431 errors
         }
       });
 

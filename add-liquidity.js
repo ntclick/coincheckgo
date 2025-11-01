@@ -2,7 +2,7 @@ const { ethers } = require('ethers');
 require('dotenv').config({ path: '.env.local' });
 
 // Contract addresses
-const SwapETHToGM_ADDRESS = '0xB39Cb09d1B97f4c310f1223bBb21d6Aba02f0f16';
+const SwapETHToGM_ADDRESS = '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A';
 
 // ABI for Swap Contract
 const SwapETHToGM_ABI = [

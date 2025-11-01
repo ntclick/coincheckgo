@@ -3,8 +3,8 @@ import { Contract, BrowserProvider, parseEther, formatEther } from 'ethers';
 import { toast } from 'react-hot-toast';
 
 // Contract configuration
-const SWAP_CONTRACT_ADDRESS = '0xB39Cb09d1B97f4c310f1223bBb21d6Aba02f0f16';
-const GM_TOKEN_ADDRESS = '0xBBac81C2b7359cf15C84d569ef297D329Af84479';
+const SWAP_CONTRACT_ADDRESS = '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A';
+const GM_TOKEN_ADDRESS = '0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08';
 const SWAP_ABI = [
   "function swapETHToGM(tuple(bytes32 handle, bytes signature) encryptedGmAmount, bytes inputProof) payable",
   "function getSwapRate() view returns (uint256)",

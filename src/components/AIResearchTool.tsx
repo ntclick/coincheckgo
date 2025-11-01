@@ -200,17 +200,8 @@ const AIResearchTool: React.FC<AIResearchToolProps> = ({ setCurrentPage, current
         setFundamentalsData(fundamentals);
         console.log('✅ Fundamentals data fetched');
 
-        // Always fetch funds data (no checkbox needed)
-        setResearchProgress('💰 Fetching investment funds data...');
-        let funds = [];
-        try {
-          funds = await getTopFunds(coinSymbol.toLowerCase());
-          setFundsList(funds);
-          console.log('✅ Funds data fetched:', funds.length);
-        } catch (fundError) {
-          console.warn('⚠️ Failed to fetch funds:', fundError);
-          setFundsList([]); // Set empty if fails
-        }
+        // Skip funds data fetching
+        setFundsList([]); // Set empty list
 
         setResearchProgress('🤖 Generating AI report with OpenAI...');
         setShowGeneratingPopup(true); // Show popup when generating

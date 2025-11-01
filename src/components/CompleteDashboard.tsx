@@ -9,10 +9,12 @@ declare global {
   interface Window {
     swapETHForGM?: (ethAmount?: string) => void;
     swapGMForETH?: (gmAmount?: string) => void;
+    swapGMForETHPublic?: (gmAmount?: string) => void;
     forceDecryptConfidentialBalance?: () => void;
     forceEIP712Signature?: () => void;
     addLiquidity?: () => void;
     addLiquidityWithAmounts?: (ethAmount: string, gmAmount: string) => void;
+    loadGMTokens?: (amount?: number) => void;
   }
 }
 
@@ -27,7 +29,8 @@ export const CompleteDashboard: React.FC = () => {
     fundResearchPool,
     connectWallet,
     userPublicBalance,
-    poolBalances
+    poolBalances,
+    initializePool
   } = useCoinCheckGoFHESimple();
   
   // Home page states
@@ -390,7 +393,7 @@ export const CompleteDashboard: React.FC = () => {
   // Load real top movers (CoinGecko)
   const loadTopMovers = async () => {
     try {
-      const coins = await cryptoApiService.getTopCryptocurrencies(300);
+      const coins = await cryptoApiService.getTopCryptocurrencies(100);
       // Sort by 24h percentage change
       const sorted = [...coins].filter(c => typeof c.price_change_percentage_24h === 'number');
       const gainers = [...sorted]
@@ -686,6 +689,32 @@ export const CompleteDashboard: React.FC = () => {
                     <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)', marginBottom: '4px' }}>💡 GM Tokens are FHE encrypted</div>
                     <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.5)' }}>Only you can decrypt with your private key</div>
                     </div>
+
+                  {/* Mint GM Tokens Button */}
+                  <button
+                    className="modern-btn"
+                    style={{ 
+                      width: '100%',
+                      fontSize: '14px',
+                      padding: '10px',
+                      background: 'linear-gradient(135deg, rgb(0, 212, 255), rgb(157, 78, 221))',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      marginTop: '12px'
+                    }}
+                    onClick={() => {
+                      if (window.loadGMTokens) {
+                        console.log('🪙 Calling loadGMTokens(100)...');
+                        window.loadGMTokens(100);
+                      } else {
+                        console.log('⚠️ loadGMTokens function not available');
+                      }
+                    }}
+                  >
+                    🪙 Mint 100 GM Tokens (Confidential)
+                  </button>
                   
                 </div>
               </div>
@@ -928,7 +957,7 @@ export const CompleteDashboard: React.FC = () => {
                           }
                         } else {
                           if (window.swapGMForETH) {
-                            console.log('🔄 Calling swapGMForETH (FHE Confidential) with amount:', fromAmount);
+                            console.log('🔐 Calling swapGMForETH (FHE Confidential) with amount:', fromAmount);
                             window.swapGMForETH(fromAmount);
                           } else {
                             console.log('⚠️ swapGMForETH function not available');
@@ -938,7 +967,7 @@ export const CompleteDashboard: React.FC = () => {
                       }}
                     >
                         {isConnected ? 
-                          (swapDirection === 'ETH_TO_GM' ? '🔄 Swap ETH for GM (Public)' : '🔐 Swap GM for ETH (FHE)') : 
+                          (swapDirection === 'ETH_TO_GM' ? '🔀 Swap ETH for GM (Hybrid)' : '🔐 Swap GM for ETH (FHE)') : 
                           '🔒 Connect Wallet'}
                     </button>
                   </div>
@@ -950,7 +979,7 @@ export const CompleteDashboard: React.FC = () => {
                     fontSize: '12px',
                     color: 'rgba(255, 255, 255, 0.6)' 
                   }}>
-                    <span>💡 Rate: {swapDirection === 'ETH_TO_GM' ? '0.001 ETH = 100 GM (1 ETH = 100,000 GM) | Public' : '100 GM = 0.001 ETH (1 GM = 0.00001 ETH) | FHE Confidential'} | Fee: 0.3%</span>
+                    <span>💡 Rate: {swapDirection === 'ETH_TO_GM' ? '0.001 ETH = 100 GM (1 ETH = 100,000 GM) | Hybrid' : '100 GM = 0.001 ETH (1 GM = 0.00001 ETH) | FHE Confidential'} | Fee: 0.3%</span>
                     <span style={{ color: 'rgb(0, 212, 255)' }}>⚡ Instant</span>
                     </div>
 
@@ -983,10 +1012,7 @@ export const CompleteDashboard: React.FC = () => {
                         }}>
                         <div style={{ fontSize: '12px', color: 'rgb(0, 212, 255)' }}>ETH Pool</div>
                         <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
-                          {(() => {
-                            // Debug log removed
-                            return poolBalances.ethPool.toFixed(3);
-                          })()} ETH
+                          {poolBalances.ethPool.toFixed(3)} ETH
                         </div>
                         </div>
                         <div style={{ 
@@ -997,84 +1023,10 @@ export const CompleteDashboard: React.FC = () => {
                         }}>
                         <div style={{ fontSize: '12px', color: 'rgb(255, 184, 0)' }}>GM Pool</div>
                         <div style={{ fontSize: '14px', fontWeight: 'bold' }}>
-                          {(() => {
-                            // Debug log removed
-                            return poolBalances.gmTokenPool.toFixed(0);
-                          })()} GM
+                          {poolBalances.gmTokenPool.toFixed(0)} GM
                         </div>
                         </div>
                       </div>
-
-                    {/* Add Liquidity Form */}
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ 
-                        display: 'block', 
-                            fontSize: '12px',
-                        color: 'rgba(255, 255, 255, 0.7)', 
-                        marginBottom: '8px', 
-                        fontWeight: '600' 
-                      }}>Add ETH Amount</label>
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0.001"
-                        placeholder="0.25"
-                        value={liquidityETH}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setLiquidityETH(value);
-                          // Auto-calculate GM amount based on rate (1 ETH = 100,000 GM)
-                          const num = parseFloat(value) || 0;
-                          setLiquidityGM((num * RATE).toString());
-                        }}
-                          style={{ 
-                          width: '100%',
-                          background: 'rgba(0, 0, 0, 0.2)',
-                          border: '1px solid rgba(0, 212, 255, 0.3)',
-                            borderRadius: '6px',
-                          padding: '8px 12px',
-                          color: 'rgb(0, 212, 255)',
-                          fontSize: '14px',
-                          fontWeight: 'bold',
-                          marginBottom: '8px'
-                        }}
-                      />
-                    </div>
-                    
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{ 
-                        display: 'block', 
-                            fontSize: '12px',
-                        color: 'rgba(255, 255, 255, 0.7)', 
-                        marginBottom: '8px', 
-                        fontWeight: '600' 
-                      }}>Add GM Amount</label>
-                      <input
-                        type="number"
-                        step="1"
-                        min="1"
-                        placeholder="25000"
-                        value={liquidityGM}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setLiquidityGM(value);
-                          // Auto-calculate ETH amount based on rate (1 ETH = 100,000 GM)
-                          const num = parseFloat(value) || 0;
-                          setLiquidityETH((num / RATE).toString());
-                        }}
-                          style={{ 
-                          width: '100%',
-                          background: 'rgba(0, 0, 0, 0.2)',
-                          border: '1px solid rgba(255, 184, 0, 0.3)',
-                            borderRadius: '6px',
-                          padding: '8px 12px',
-                          color: 'rgb(255, 184, 0)',
-                          fontSize: '14px',
-                          fontWeight: 'bold',
-                          marginBottom: '8px'
-                        }}
-                      />
-                    </div>
 
                     <button
                       className="modern-btn"
@@ -1569,7 +1521,7 @@ export const CompleteDashboard: React.FC = () => {
                       }}
                     >
                         {isConnected ? 
-                          (swapDirection === 'ETH_TO_GM' ? '🔄 Swap ETH for GM (Public)' : '🔐 Swap GM for ETH (FHE)') : 
+                          (swapDirection === 'ETH_TO_GM' ? '🔀 Swap ETH for GM (Hybrid)' : '🔐 Swap GM for ETH (FHE)') : 
                           '🔒 Connect Wallet'}
                   </button>
                 </div>
@@ -1581,7 +1533,7 @@ export const CompleteDashboard: React.FC = () => {
                     fontSize: '12px', 
                     color: 'rgba(255, 255, 255, 0.6)' 
                   }}>
-                    <span>💡 Rate: {swapDirection === 'ETH_TO_GM' ? '0.001 ETH = 100 GM (1 ETH = 100,000 GM) | Public' : '100 GM = 0.001 ETH (1 GM = 0.00001 ETH) | FHE Confidential'} | Fee: 0.3%</span>
+                    <span>💡 Rate: {swapDirection === 'ETH_TO_GM' ? '0.001 ETH = 100 GM (1 ETH = 100,000 GM) | Hybrid' : '100 GM = 0.001 ETH (1 GM = 0.00001 ETH) | FHE Confidential'} | Fee: 0.3%</span>
                     <span style={{ color: 'rgb(0, 212, 255)' }}>⚡ Instant</span>
                             </div>
                             </div>

@@ -2,8 +2,8 @@ const { ethers } = require('ethers');
 require('dotenv').config({ path: '.env.local' });
 
 // Contract addresses
-const GMToken_ADDRESS = '0xBBac81C2b7359cf15C84d569ef297D329Af84479';
-const SwapETHToGM_ADDRESS = '0xB39Cb09d1B97f4c310f1223bBb21d6Aba02f0f16';
+const GMToken_ADDRESS = '0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08';
+const SwapETHToGM_ADDRESS = '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A';
 
 // ABI for GMToken (FHE encrypted)
 const GMToken_ABI = [

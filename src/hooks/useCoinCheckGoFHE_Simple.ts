@@ -33,7 +33,7 @@ const notifyGlobalStateChange = () => {
 
   // Contract addresses - use env with sensible fallbacks
   const GMToken_ADDRESS = (process.env.REACT_APP_GM_TOKEN_ADDRESS as string) || '0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08';
-  const SwapETHToGM_ADDRESS = (process.env.REACT_APP_SWAP_ADDRESS as string) || '0x438A2ce1B563E71b68F2f0EE0575736CccF3231e';
+  const SwapETHToGM_ADDRESS = (process.env.REACT_APP_SWAP_ADDRESS as string) || '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A';
   const Research_ADDRESS = (process.env.REACT_APP_RESEARCH_AI_ADDRESS as string) || '0xBD341699753FEa3305bf16Eaf8228A1F96E945fF';
 
 // Contract ABIs
@@ -56,18 +56,17 @@ const GMToken_ABI = [
 const SwapETHToGM_ABI = [
   "function swapETHForGM() payable",
   "function swapETHForGMPublic() payable",
-  "function swapGMForETH(uint256)",
+  "function swapGMForETH(bytes32,bytes,uint256) payable",
   "function swapGMForETHPublic(uint256)",
   "function getReserves() view returns (uint256,uint256)",
-  "function getPoolBalances() view returns (uint256,uint256)",
-  "function ethPool() view returns (uint256)",
-  "function gmTokenPool() view returns (uint256)",
+  "function getPoolState() view returns (bool,uint256,uint256)",
+  "function totalETHReserve() view returns (uint256)",
+  "function totalGMReserve() view returns (uint256)",
   "function poolInitialized() view returns (bool)",
   "function initializePool(uint256) payable",
+  "function addLiquidity(uint256) payable",
   "function mintGMTokensToPool(uint256)",
-  "function fundGMTokenPool(uint256)",
-  "function fundETHPool() payable",
-  "function getPoolState() view returns (bool,uint256,uint256)"
+  "function getSwapFee() pure returns (uint256)"
 ];
 
 const Research_ABI = [
@@ -153,6 +152,9 @@ const useCoinCheckGoFHESimple = () => {
             await initializeFHEVM(window.ethereum);
             setFhevmInitialized(true);
             setAclPermissionsGranted(true);
+            
+            // Load data after restoring wallet
+            await loadDataWithContracts(gmToken, swap, research, userAddress);
             
             console.log('✅ Wallet connection restored from cache');
           } else {
@@ -443,7 +445,7 @@ const useCoinCheckGoFHESimple = () => {
             handleContractPairs,
             keypair.privateKey,
             keypair.publicKey,
-            signature.replace("0x", ""),
+            signature && typeof signature === 'string' ? signature.replace("0x", "") : (signature || ""),
             contractAddresses,
             userAddress,
             startTimeStamp,
@@ -484,6 +486,7 @@ const useCoinCheckGoFHESimple = () => {
 
   // Load data with contracts
   const loadDataWithContracts = async (gmContract: any, swapContract: any, researchContract: any, userAddress: string, forceReload: boolean = false) => {
+    console.log('📊 loadDataWithContracts called with swapContract:', !!swapContract);
     try {
       // Verify contract is deployed (use contract's provider or BrowserProvider)
       try {
@@ -547,11 +550,11 @@ const useCoinCheckGoFHESimple = () => {
       }
       
       // Load pool balances
-      // Debug log removed
+      console.log('📊 Loading pool balances...');
       const poolBalancesData = await getPoolBalancesWithContract(swapContract);
-      // Debug log removed
+      console.log('📊 Pool balances loaded:', poolBalancesData);
       setPoolBalances(poolBalancesData);
-      // Debug log removed
+      console.log('✅ Pool balances state updated');
       
       // Debug log removed
     } catch (error: any) {
@@ -571,16 +574,15 @@ const useCoinCheckGoFHESimple = () => {
     try {
       // Try getReserves first (from reference file)
       try {
-        // Debug log removed
+        console.log('🔄 Trying getReserves()...');
         const reserves = await contract.getReserves();
-        // Debug log removed
+        console.log('📊 getReserves() result:', reserves);
         const ethPool = Number(ethers.formatEther(reserves[0]));
         const gmTokenPool = Number(ethers.formatEther(reserves[1]));
-        // Debug log removed
+        console.log('✅ Pool balances loaded:', { ethPool, gmTokenPool });
         return { ethPool, gmTokenPool };
       } catch (getReservesError: any) {
         console.log('⚠️ getReserves() failed:', getReservesError.message);
-        // Debug log removed
       }
 
       // Try getPoolBalances second
@@ -602,24 +604,24 @@ const useCoinCheckGoFHESimple = () => {
       let gmTokenPool = 0;
       
       try {
-        console.log('🔄 Trying ethPool()...');
-        const ethPoolResult = await contract.ethPool();
-        console.log('📊 ethPool() result:', ethPoolResult);
+        console.log('🔄 Trying totalETHReserve()...');
+        const ethPoolResult = await contract.totalETHReserve();
+        console.log('📊 totalETHReserve() result:', ethPoolResult);
         ethPool = Number(ethers.formatEther(ethPoolResult));
         console.log('💰 ETH Pool balance:', ethPool, 'ETH');
       } catch (ethError: any) {
-        console.log('⚠️ ethPool() failed:', ethError.message);
+        console.log('⚠️ totalETHReserve() failed:', ethError.message);
         console.log('⚠️ Using default 0 for ETH pool');
-    }
+      }
 
-    try {
-        console.log('🔄 Trying gmTokenPool()...');
-        const gmTokenPoolResult = await contract.gmTokenPool();
-        console.log('📊 gmTokenPool() result:', gmTokenPoolResult);
+      try {
+        console.log('🔄 Trying totalGMReserve()...');
+        const gmTokenPoolResult = await contract.totalGMReserve();
+        console.log('📊 totalGMReserve() result:', gmTokenPoolResult);
         gmTokenPool = Number(ethers.formatEther(gmTokenPoolResult));
         console.log('💰 GM Token Pool balance:', gmTokenPool, 'GM');
       } catch (gmError: any) {
-        console.log('⚠️ gmTokenPool() failed:', gmError.message);
+        console.log('⚠️ totalGMReserve() failed:', gmError.message);
         console.log('⚠️ Using default 0 for GM pool');
       }
       
@@ -1122,6 +1124,52 @@ const useCoinCheckGoFHESimple = () => {
     toast.success(`Minted ${amount} GM tokens`);
   };
 
+  // Initialize pool
+  const initializePool = async (ethAmount: string | number, gmAmount: string | number) => {
+    if (!isConnected || !swapContract || !gmTokenContract) {
+      toast.error('Please connect your wallet first!');
+      return;
+    }
+
+    try {
+      const ethAmountStr = typeof ethAmount === 'number' ? ethAmount.toString() : ethAmount;
+      const gmAmountStr = typeof gmAmount === 'number' ? gmAmount.toString() : gmAmount;
+      
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const swapContractWithSigner = new ethers.Contract(SwapETHToGM_ADDRESS, SwapETHToGM_ABI, signer);
+      const gmTokenContractWithSigner = new ethers.Contract(GMToken_ADDRESS, GMToken_ABI, signer);
+      
+      toast.loading(`🔄 Initializing pool with ${ethAmountStr} ETH and ${gmAmountStr} GM...`);
+      
+      // Check allowance
+      const allowance = await gmTokenContractWithSigner.allowance(address, SwapETHToGM_ADDRESS);
+      const gmAmountWei = ethers.parseEther(gmAmountStr);
+      
+      if (allowance < gmAmountWei) {
+        toast.loading('🔐 Approving GM tokens...');
+        const approveTx = await gmTokenContractWithSigner.approve(SwapETHToGM_ADDRESS, gmAmountWei);
+        await approveTx.wait();
+        toast.success('✅ Approval successful');
+      }
+      
+      // Initialize pool
+      const tx = await swapContractWithSigner.initializePool(
+        gmAmountWei,
+        { value: ethers.parseEther(ethAmountStr) }
+      );
+      await tx.wait();
+      
+      toast.success(`✅ Pool initialized with ${ethAmountStr} ETH and ${gmAmountStr} GM!`);
+      
+      // Reload data
+      setTimeout(() => loadDataWithContracts(gmTokenContract!, swapContract!, researchContract!, address, true), 2000);
+    } catch (error: any) {
+      console.error('❌ Initialize pool failed:', error);
+      toast.error(`Initialize pool failed: ${error.shortMessage || error.message}`);
+    }
+  };
+
   return {
     // Connection state
     isConnected,
@@ -1175,6 +1223,7 @@ const useCoinCheckGoFHESimple = () => {
     performResearch,
     getResearchCost,
     fundResearchPool,
+    initializePool,
     
     // Contract addresses
     contractAddress: GMToken_ADDRESS,

@@ -24,3 +24,13 @@ yarn-debug.log*
 yarn-error.log*
 
 .vercel
+
+# Hardhat
+/cache
+artifacts/@fhevm/
+artifacts/@openzeppelin/
+artifacts/build-info/
+artifacts/contracts/
+/cache
+/solc-inputs
+/solc-outputs

@@ -20,12 +20,13 @@
   },
   "devDependencies": {
     "@craco/craco": "^7.1.0",
-    "@fhevm/solidity": "^0.8.0",
+    "@fhevm/solidity": "^0.7.0",
     "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
     "@nomicfoundation/hardhat-ethers": "^3.1.2",
     "@nomicfoundation/hardhat-ignition-ethers": "^0.15.16",
     "@nomicfoundation/hardhat-network-helpers": "^1.1.2",
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@openzeppelin/confidential-contracts": "^0.2.0",
     "@typechain/ethers-v6": "^0.5.1",
     "@typechain/hardhat": "^9.1.0",
     "@types/chai": "^4.3.20",
@@ -40,7 +41,9 @@
     "express": "^5.1.0",
     "hardhat": "^2.26.5",
     "hardhat-gas-reporter": "^2.3.0",
+    "http-proxy-middleware": "^3.0.5",
     "path-browserify": "^1.0.1",
+    "process": "^0.11.10",
     "solc": "^0.8.30",
     "solidity-coverage": "^0.8.16",
     "stream-browserify": "^3.0.0",
@@ -48,9 +51,10 @@
     "typescript": "^4.9.5"
   },
   "scripts": {
-    "start": "cross-env PORT=4000 react-scripts start",
-    "build": "cross-env CI=false react-scripts build",
-    "test": "react-scripts test",
+    "start": "cross-env PORT=4000 craco start",
+    "build": "cross-env CI=false craco build",
+    "server": "node server.js",
+    "test": "craco test",
     "test:apis": "node scripts/test-env-and-apis.mjs",
     "proxy:lunar": "node server/proxy-lunarcrush.mjs",
     "eject": "react-scripts eject"
@@ -71,7 +75,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "proxy": "http://localhost:4000",
-  "type": "module"
+  }
 }

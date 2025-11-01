@@ -374,7 +374,7 @@ export function useCoinCheckGoFHE() {
       const provider = new BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
            const swapContract = new Contract(
-             '0xB39Cb09d1B97f4c310f1223bBb21d6Aba02f0f16', // SWAP_CONTRACT_ADDRESS
+             '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A', // SWAP_CONTRACT_ADDRESS
         [
           'function swapETHToGM(bytes32 encryptedGmAmount, bytes inputProof) payable'
         ],
@@ -383,11 +383,11 @@ export function useCoinCheckGoFHE() {
 
            // CRITICAL: Encrypt with the SAME address that will sign the transaction
            // This ensures FHE permissions match the transaction signer
-           const { handle, inputProof } = await encryptValueWithProof(gmAmount, '0xB39Cb09d1B97f4c310f1223bBb21d6Aba02f0f16', address);
+           const { handle, inputProof } = await encryptValueWithProof(gmAmount, '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A', address);
       console.log('🔐 Encrypted GM amount with proof:', { 
         handle, 
         inputProofLength: inputProof.length,
-        contractAddress: '0xB39Cb09d1B97f4c310f1223bBb21d6Aba02f0f16',
+        contractAddress: '0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A',
         userAddress: address
       });
 

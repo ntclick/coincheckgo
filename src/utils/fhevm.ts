@@ -7,6 +7,14 @@
 
 import { BrowserProvider } from 'ethers';
 
+// Polyfill for 'global' variable needed by some node packages in browser
+if (typeof window !== 'undefined' && typeof window.global === 'undefined') {
+  (window as any).global = window;
+}
+
+// Try to import from npm package first, fallback to CDN
+let npmSDK: any = null;
+
 // FHEVM SDK types
 declare global {
   interface Window {
@@ -45,6 +53,7 @@ const waitForESMCDN = async (maxWait = 10000): Promise<boolean> => {
   const startTime = Date.now();
   
   while (Date.now() - startTime < maxWait) {
+    // Check if CDN loaded (window.initSDK, etc.)
     const hasESM = typeof window !== 'undefined' && 
                    typeof (window as any).initSDK === 'function' && 
                    typeof (window as any).createInstance === 'function' && 
@@ -70,7 +79,7 @@ const waitForESMCDN = async (maxWait = 10000): Promise<boolean> => {
 };
 
 /**
- * Load FHEVM SDK dynamically
+ * Load FHEVM SDK dynamically - try npm first, then CDN
  */
 const loadFHEVMSDK = async (): Promise<boolean> => {
   try {
@@ -78,7 +87,31 @@ const loadFHEVMSDK = async (): Promise<boolean> => {
       return true;
     }
 
-    console.log('🔐 Waiting for FHEVM SDK ESM CDN...');
+    // Priority 1: Try npm package
+    if (npmSDK && typeof npmSDK.initSDK === 'function') {
+      console.log('✅ FHEVM SDK loaded from npm package');
+      fhevmSDK = npmSDK;
+      sdkLoaded = true;
+      return true;
+    }
+
+    // Try to load npm package if not already loaded
+    if (!npmSDK) {
+      try {
+        const dynamicSDK = await import('@zama-fhe/relayer-sdk/web');
+        console.log('✅ FHEVM SDK loaded from npm package (dynamic import)');
+        console.log('📦 SDK exports:', Object.keys(dynamicSDK));
+        fhevmSDK = dynamicSDK;
+        npmSDK = dynamicSDK;
+        sdkLoaded = true;
+        return true;
+      } catch (npmError) {
+        console.log('⚠️ FHEVM SDK npm package not available:', (npmError as Error).message);
+      }
+    }
+
+    // Priority 2: Try CDN
+    console.log('🔐 FHEVM SDK npm not available, waiting for CDN...');
     return await waitForESMCDN();
   } catch (error) {
     console.error('❌ Error loading FHEVM SDK:', error);
