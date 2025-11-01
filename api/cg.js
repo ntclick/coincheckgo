@@ -1,14 +1,14 @@
 // Simple 60s in-memory cache (per lambda instance)
-const memoryCache = new Map<string, { body: string; status: number; contentType: string; ts: number }>();
+const memoryCache = new Map();
 const CACHE_TTL_MS = 60 * 1000; // 60 seconds
 
 // Simple CoinGecko proxy to bypass CORS and attach API key headers
 // Handles all /api/cg/* paths
-export default async function handler(req: any, res: any) {
+export default async function handler(req, res) {
   try {
     const apiBase = 'https://api.coingecko.com/api/v3';
     
-    // Vercel rewrites: /api/cg/coins/markets?vs_currency=usd becomes /api/cg.ts with req.query.path = ['coins', 'markets']
+    // Vercel rewrites: /api/cg/coins/markets?vs_currency=usd becomes /api/cg.js with req.query.path = ['coins', 'markets']
     let path = '';
     let query = '';
     
@@ -64,20 +64,20 @@ export default async function handler(req: any, res: any) {
       return res.send(cached.body);
     }
 
-    const headers: Record<string, string> = {
+    const headers = {
       'accept': 'application/json'
     };
     const apiKey = process.env.REACT_APP_COINCHECKGO_API_KEY || process.env.CG_API_KEY || '';
     if (apiKey) headers['x-cg-demo-api-key'] = apiKey;
 
     // Forward method, headers (limited) and body when present
-    const init: RequestInit = {
+    const init = {
       method: req.method,
       headers,
     };
     if (req.method && req.method !== 'GET' && req.method !== 'HEAD') {
       const body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
-      (init as any).body = body;
+      init.body = body;
       headers['content-type'] = headers['content-type'] || 'application/json';
     }
 
@@ -98,8 +98,9 @@ export default async function handler(req: any, res: any) {
       ts: Date.now()
     });
     res.send(text);
-  } catch (error: any) {
+  } catch (error) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(500).json({ error: 'CoinGecko proxy failed', message: error?.message || String(error) });
   }
 }
+

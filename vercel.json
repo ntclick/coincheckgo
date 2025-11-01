@@ -23,7 +23,7 @@
   "rewrites": [
     {
       "source": "/api/cg/:path*",
-      "destination": "/api/cg"
+      "destination": "/api/cg.js"
     }
   ]
 }
