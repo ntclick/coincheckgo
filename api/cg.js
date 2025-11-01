@@ -99,8 +99,8 @@ export default async function handler(req, res) {
     });
     res.send(text);
   } catch (error) {
+    console.error('[CG Proxy] Error:', error);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(500).json({ error: 'CoinGecko proxy failed', message: error?.message || String(error) });
   }
 }
-
