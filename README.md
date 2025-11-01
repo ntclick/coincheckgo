@@ -11,25 +11,29 @@ An AI-powered crypto research platform aggregating trusted market, technical, an
 ### 🤖 AI Research Tool
 **Type a token name → Get a complete investment-grade report**
 
-- ✅ Market Data (CoinGecko): Price, volume, market cap, 24h high/low
+- ✅ Market Data (CoinGecko): Price, volume, market cap, 24h high/low, circulating supply
 - ✅ Technical Analysis (Taapi.io): RSI, MACD, EMA, Bollinger Bands, ADX
-- ✅ Fundamentals (CryptoRank): Tokenomics, top investment funds
-- ✅ AI Report (OpenAI): Expert-style, human-readable insights
-– ✅ Live Charts (Dexscreener): Real-time DEX price charts
+- ✅ Fundamentals (CryptoRank): Tokenomics, investment funds
+- ✅ AI Report (OpenAI): Expert-style, human-readable insights with GPT-4
+- ✅ Live Charts (Dexscreener): Real-time DEX price charts embedded
 
 **Cost**: 10 GM tokens per research
 
 ### 💰 Token System
-- **GM Token**: The platform’s native utility token
-- **ETH ↔ GM Swap**: Swap both directions
+- **GM Token**: The platform's native utility token (ERC20 + FHE hybrid)
+- **ETH ↔ GM Swap**: 
+  - ETH → GM: Hybrid swap (public + confidential)
+  - GM → ETH: FHE confidential swap
 - **FHE Encryption**: Balances are fully encrypted at rest and on-chain
-- **Smart Approval**: Approve 100 GM once to cover ~10 researches
+- **Liquidity Pool**: AMM-based swap with pool management
+- **Smart Approval**: One-time approval for FHE transfers
 
 ### 📊 Market Dashboard
 - Top 300 cryptocurrencies
-- Market capitalization (20 items/page)
-- Top gainers/losers (5 items each)
-- News feed from CoinDesk, Decrypt, CoinTelegraph
+- Market capitalization with pagination (20 items/page)
+- Top gainers/losers (10 items each)
+- News feed from CoinDesk, Decrypt, CoinTelegraph with pagination (12 items/page)
+- Real-time crypto market data and price tracking
 
 ---
 
@@ -56,11 +60,14 @@ Enter a token/project name → receive a complete institutional-grade profile.
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React + TypeScript
+- **Frontend**: React 18 + TypeScript + Craco
 - **Blockchain**: Ethereum (Sepolia Testnet)
-- **Privacy**: FHEVM SDK (Fully Homomorphic Encryption)
-- **Smart Contracts**: Solidity (Hardhat)
-- **APIs**: CoinGecko, Taapi.io, CryptoRank, OpenAI, Dexscreener
+- **Privacy**: FHEVM SDK v0.2 (@zama-fhe/relayer-sdk)
+- **Smart Contracts**: Solidity (Hardhat + OpenZeppelin Confidential)
+- **Wallet Integration**: MetaMask (Ethers.js v6)
+- **APIs**: CoinGecko, Taapi.io, CryptoRank, OpenAI (GPT-4), Dexscreener
+- **Build Tools**: Webpack + Node polyfills
+- **Notifications**: React Hot Toast
 - **Hosting**: Vercel
 
 ---
@@ -87,22 +94,34 @@ REACT_APP_OPENAI_API_KEY=your_key
 REACT_APP_OPENAI_MODEL=gpt-4
 REACT_APP_CRYPTORANK_API_KEY=your_key
 REACT_APP_TAAPI_API_KEY=your_key
+
+# Optional: For local development
+REACT_APP_COINCHECKGO_API_KEY=your_coingecko_key
 ```
 
-### 3) Run
+### 3) Run Development Server
 ```bash
+# Start React app
 npm start
+
+# In another terminal, start backend proxy server
+npm run server
 ```
+
+The app runs on `http://localhost:4000`
 
 ---
 
-## 📋 Smart Contracts
+## 📋 Smart Contracts (Sepolia Testnet)
 
 | Contract | Address | Purpose |
 |----------|---------|---------|
-| GM Token | `0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08` | ERC20 + FHE balance encryption |
-| Swap | `0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A` | ETH ↔ GM swap |
-| Research AI | `0xBD341699753FEa3305bf16Eaf8228A1F96E945fF` | AI research with (FHE‑ready) flows |
+| GM Token | `0x902D1319547Ef7D27af4De51EE6cde95A8B4bc08` | ERC20 + FHE hybrid token with confidential balances |
+| Swap | `0xd0e183F11948CbA9DAF6AC46861DC805231aFA7A` | ETH ↔ GM AMM swap with liquidity pool |
+| Research AI | `0xBD341699753FEa3305bf16Eaf8228A1F96E945fF` | AI research payment (FHE-ready) |
+
+**Swap Rate**: 1 ETH = 100,000 GM (0.001 ETH = 100 GM)
+**Swap Fee**: 0.3%
 
 ---
 
