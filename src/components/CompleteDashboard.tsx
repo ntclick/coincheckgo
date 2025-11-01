@@ -1774,7 +1774,7 @@ export const CompleteDashboard: React.FC = () => {
                   </tbody>
                 </table>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', marginBottom: '100px' }}>
                 <button
                   onClick={() => setMarketPage((p) => Math.max(0, p - 1))}
                   disabled={marketPage === 0}
