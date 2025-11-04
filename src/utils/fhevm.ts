@@ -145,8 +145,10 @@ export const autoInitializeFHEVM = async (): Promise<boolean> => {
     console.log('✅ FHEVM WASM auto-loaded');
 
     // Create instance according to Zama Protocol documentation
+    // Tạo config từ SepoliaConfig nhưng bỏ rpcUrl để tránh CORS
+    const { rpcUrl: _, ...sepoliaConfigWithoutRpc } = SepoliaConfig;
     const config = {
-      ...SepoliaConfig,
+      ...sepoliaConfigWithoutRpc,
       relayerUrl: FHEVM_CONFIG.relayerUrl,
       chainId: FHEVM_CONFIG.chainId,
       // Bỏ rpcUrl để tránh CORS error khi auto-init (không có wallet)
