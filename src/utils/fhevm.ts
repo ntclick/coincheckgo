@@ -181,6 +181,13 @@ export const initializeFHEVM = async (provider: BrowserProvider, signer?: any): 
     // If already auto-initialized (WASM loaded), create instance with wallet provider
     if (autoInitialized) {
       console.log('🔐 Creating FHEVM instance with wallet provider (WASM already loaded)...');
+      console.log('🔍 window.ethereum available:', !!window.ethereum);
+      
+      if (!window.ethereum) {
+        console.error('❌ window.ethereum not available - cannot create FHEVM instance');
+        throw new Error('MetaMask not available. Please install MetaMask and connect your wallet.');
+      }
+      
       const { createInstance, SepoliaConfig } = fhevmSDK;
       
       // Theo tài liệu Zama: chỉ cần SepoliaConfig + network: window.ethereum
@@ -190,19 +197,37 @@ export const initializeFHEVM = async (provider: BrowserProvider, signer?: any): 
         network: window.ethereum, // Use MetaMask provider (no CORS)
       };
       
-      fhevmInstance = await createInstance(config);
-      console.log('✅ FHEVM instance created with provider');
+      console.log('🔐 Creating FHEVM instance with config:', {
+        chainId: config.chainId,
+        relayerUrl: config.relayerUrl,
+        hasNetwork: !!config.network
+      });
       
-      // Set global FHEVM instance for script access
-      window.fhevm = fhevmInstance;
-      
-      isSDKInitialized = true;
-      
-      // Dispatch event to notify script that FHEVM is ready with provider
-      window.dispatchEvent(new CustomEvent('fhevmReady', { detail: { fhevm: fhevmInstance } }));
-      console.log('🔔 FHEVM ready event dispatched (with provider)');
-      
-      return true;
+      try {
+        fhevmInstance = await createInstance(config);
+        console.log('✅ FHEVM instance created with provider');
+        console.log('🔍 FHEVM instance methods:', Object.keys(fhevmInstance || {}));
+        
+        // Set global FHEVM instance for script access
+        window.fhevm = fhevmInstance;
+        console.log('✅ window.fhevm set');
+        
+        isSDKInitialized = true;
+        
+        // Dispatch event to notify script that FHEVM is ready with provider
+        window.dispatchEvent(new CustomEvent('fhevmReady', { detail: { fhevm: fhevmInstance } }));
+        console.log('🔔 FHEVM ready event dispatched (with provider)');
+        
+        return true;
+      } catch (createError: any) {
+        console.error('❌ Failed to create FHEVM instance:', createError);
+        console.error('❌ Error details:', {
+          message: createError?.message,
+          stack: createError?.stack,
+          cause: createError?.cause
+        });
+        throw new Error(`FHEVM instance creation failed: ${createError?.message || 'Unknown error'}`);
+      }
     }
 
     // Load SDK first
