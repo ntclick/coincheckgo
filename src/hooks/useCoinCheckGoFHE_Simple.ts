@@ -148,7 +148,10 @@ const useCoinCheckGoFHESimple = () => {
             (window as any).researchContract = research;
             
             // Initialize FHEVM
-            await initializeFHEVM(window.ethereum);
+            // Create BrowserProvider from window.ethereum
+            const { BrowserProvider } = await import('ethers');
+            const ethersProvider = new BrowserProvider(window.ethereum);
+            await initializeFHEVM(ethersProvider);
             setFhevmInitialized(true);
             setAclPermissionsGranted(true);
             
@@ -279,10 +282,12 @@ const useCoinCheckGoFHESimple = () => {
         // Debug log removed
       
       // Initialize FHEVM
-      // Debug log removed
-      await initializeFHEVM(window.ethereum);
-          setFhevmInitialized(true);
-          setAclPermissionsGranted(true);
+      // Create BrowserProvider from window.ethereum
+      const { BrowserProvider } = await import('ethers');
+      const ethersProvider = new BrowserProvider(window.ethereum);
+      await initializeFHEVM(ethersProvider);
+      setFhevmInitialized(true);
+      setAclPermissionsGranted(true);
       // Debug log removed
       
       // Load token balances
