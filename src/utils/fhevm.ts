@@ -149,7 +149,8 @@ export const autoInitializeFHEVM = async (): Promise<boolean> => {
       ...SepoliaConfig,
       relayerUrl: FHEVM_CONFIG.relayerUrl,
       chainId: FHEVM_CONFIG.chainId,
-      rpcUrl: FHEVM_CONFIG.rpcUrl,
+      // Bỏ rpcUrl để tránh CORS error khi auto-init (không có wallet)
+      // rpcUrl chỉ cần khi user connect wallet qua MetaMask
       // No network provider for auto-init
     };
 
