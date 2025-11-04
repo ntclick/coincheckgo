@@ -319,7 +319,16 @@
                 
                 // Use React app's FHEVM instance for encrypted input
                 if (!window.fhevm) {
-                    throw new Error('FHEVM not available for confidential swap');
+                    // Check if wallet is connected but FHEVM not ready yet
+                    if (!userAddress) {
+                        throw new Error('Please connect your wallet first to enable FHEVM for confidential swap');
+                    }
+                    // Wallet connected but FHEVM not ready - wait a bit and retry
+                    console.log('⏳ Waiting for FHEVM to initialize...');
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    if (!window.fhevm) {
+                        throw new Error('FHEVM is still initializing. Please wait a moment and try again, or reconnect your wallet.');
+                    }
                 }
 
                 // Check user balance
