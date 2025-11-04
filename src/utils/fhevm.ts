@@ -144,30 +144,14 @@ export const autoInitializeFHEVM = async (): Promise<boolean> => {
     await initSDK();
     console.log('✅ FHEVM WASM auto-loaded');
 
-    // Create instance according to Zama Protocol documentation
-    // Tạo config từ SepoliaConfig nhưng bỏ rpcUrl để tránh CORS
-    const { rpcUrl: _, ...sepoliaConfigWithoutRpc } = SepoliaConfig;
-    const config = {
-      ...sepoliaConfigWithoutRpc,
-      relayerUrl: FHEVM_CONFIG.relayerUrl,
-      chainId: FHEVM_CONFIG.chainId,
-      // Bỏ rpcUrl để tránh CORS error khi auto-init (không có wallet)
-      // rpcUrl chỉ cần khi user connect wallet qua MetaMask
-      // No network provider for auto-init
-    };
-
-    fhevmInstance = await createInstance(config);
-    console.log('✅ FHEVM instance auto-created:', fhevmInstance);
-    
-    // Set global FHEVM instance for script access
-    window.fhevm = fhevmInstance;
+    // KHÔNG tạo instance ở đây để tránh CORS
+    // FHEVM SDK cần RPC provider để gọi contract (getKmsSigners), 
+    // nhưng RPC endpoint không hỗ trợ CORS từ browser
+    // Instance sẽ được tạo khi user connect wallet (trong initializeFHEVM)
+    // Khi đó sẽ dùng MetaMask provider (window.ethereum), không bị CORS
     
     autoInitialized = true;
-    console.log('✅ FHEVM SDK auto-initialized successfully');
-    
-    // Dispatch event to notify script that FHEVM is ready
-    window.dispatchEvent(new CustomEvent('fhevmReady', { detail: { fhevm: fhevmInstance } }));
-    console.log('🔔 FHEVM ready event dispatched');
+    console.log('✅ FHEVM SDK WASM loaded (instance will be created when wallet connects)');
     
     return true;
   } catch (error) {
