@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { toast } from 'react-hot-toast';
-import { encryptValueWithProof } from '../utils/fhevm';
+import { encryptValueWithProof, initializeFHEVM as initFHEVM } from '../utils/fhevm';
 
 // Extend Window interface for FHEVM
 declare global {
@@ -151,9 +151,11 @@ const useCoinCheckGoFHESimple = () => {
             // Create BrowserProvider from window.ethereum
             const { BrowserProvider } = await import('ethers');
             const ethersProvider = new BrowserProvider(window.ethereum);
-            await initializeFHEVM(ethersProvider);
-            setFhevmInitialized(true);
-            setAclPermissionsGranted(true);
+            const fhevmSuccess = await initFHEVM(ethersProvider);
+            if (fhevmSuccess) {
+              setFhevmInitialized(true);
+              setAclPermissionsGranted(true);
+            }
             
             // Load data after restoring wallet
             await loadDataWithContracts(gmToken, swap, research, userAddress);
@@ -285,9 +287,11 @@ const useCoinCheckGoFHESimple = () => {
       // Create BrowserProvider from window.ethereum
       const { BrowserProvider } = await import('ethers');
       const ethersProvider = new BrowserProvider(window.ethereum);
-      await initializeFHEVM(ethersProvider);
-      setFhevmInitialized(true);
-      setAclPermissionsGranted(true);
+      const fhevmSuccess = await initFHEVM(ethersProvider);
+      if (fhevmSuccess) {
+        setFhevmInitialized(true);
+        setAclPermissionsGranted(true);
+      }
       // Debug log removed
       
       // Load token balances
@@ -357,33 +361,9 @@ const useCoinCheckGoFHESimple = () => {
     toast.success('Wallet disconnected');
   };
 
-  // Initialize FHEVM
-  const initializeFHEVM = async (provider: any) => {
-    try {
-      setFhevmLoading(true);
-      
-      // Wait for FHEVM to be available
-      let retries = 0;
-      while (!window.fhevm && retries < 30) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        retries++;
-      }
-      
-      if (!window.fhevm) {
-        throw new Error('FHEVM not available');
-      }
-      
-      setFhevmInitialized(true);
-      setAclPermissionsGranted(true);
-      
-    } catch (error: any) {
-      console.error('❌ FHEVM initialization failed:', error);
-      setFhevmInitialized(false);
-      setAclPermissionsGranted(false);
-    } finally {
-      setFhevmLoading(false);
-    }
-  };
+  // Initialize FHEVM - use function from fhevm.ts
+  // Note: initializeFHEVM is imported from fhevm.ts, this local function is removed
+  // The imported function will create FHEVM instance and set window.fhevm
 
   // Force decryption popup
   const forceDecryptionPopup = async (userAddress: string) => {
