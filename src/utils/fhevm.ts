@@ -178,18 +178,20 @@ export const initializeFHEVM = async (provider: BrowserProvider, signer?: any): 
       return true;
     }
 
-    // If already auto-initialized, just update with provider
-    if (autoInitialized && fhevmInstance) {
-      console.log('🔐 Updating FHEVM instance with wallet provider...');
+    // If already auto-initialized (WASM loaded), create instance with wallet provider
+    if (autoInitialized) {
+      console.log('🔐 Creating FHEVM instance with wallet provider (WASM already loaded)...');
       const { createInstance, SepoliaConfig } = fhevmSDK;
       
+      // Theo tài liệu Zama: chỉ cần SepoliaConfig + network: window.ethereum
+      // Không cần rpcUrl vì MetaMask sẽ handle RPC calls
       const config = {
         ...SepoliaConfig,
-        network: window.ethereum,
+        network: window.ethereum, // Use MetaMask provider (no CORS)
       };
       
       fhevmInstance = await createInstance(config);
-      console.log('✅ FHEVM instance updated with provider');
+      console.log('✅ FHEVM instance created with provider');
       
       // Set global FHEVM instance for script access
       window.fhevm = fhevmInstance;
@@ -222,20 +224,19 @@ export const initializeFHEVM = async (provider: BrowserProvider, signer?: any): 
     await initSDK();
     console.log('✅ FHEVM SDK WASM loaded');
 
-    // Step 2: Create instance theo hướng dẫn Zama Protocol GPT
+    // Step 2: Create instance theo tài liệu Zama
+    // Chỉ cần SepoliaConfig + network: window.ethereum
+    // Không cần rpcUrl vì MetaMask sẽ handle RPC calls (không bị CORS)
     const config = {
       ...SepoliaConfig,
-      relayerUrl: FHEVM_CONFIG.relayerUrl,
-      chainId: FHEVM_CONFIG.chainId,
-      rpcUrl: FHEVM_CONFIG.rpcUrl,
-      network: window.ethereum, // Use window.ethereum for wallet connection
+      network: window.ethereum, // Use MetaMask provider (no CORS)
       ...(signer && { signer }), // Add signer if provided for user decryption
     };
 
     console.log('🔐 Creating FHEVM instance with Zama config:', config);
     console.log('🔐 Relayer URL:', config.relayerUrl);
     console.log('🔐 Chain ID:', config.chainId);
-    console.log('🔐 RPC URL:', config.rpcUrl);
+    console.log('🔐 Using MetaMask provider (network: window.ethereum)');
 
     fhevmInstance = await createInstance(config);
     console.log('✅ FHEVM instance created:', fhevmInstance);
