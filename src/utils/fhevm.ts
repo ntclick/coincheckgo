@@ -141,17 +141,26 @@ export const autoInitializeFHEVM = async (): Promise<boolean> => {
     const { initSDK, createInstance, SepoliaConfig } = fhevmSDK;
 
     console.log('🔐 Auto-loading FHEVM WASM...');
-    await initSDK();
-    console.log('✅ FHEVM WASM auto-loaded');
-
-    // KHÔNG tạo instance ở đây để tránh CORS
-    // FHEVM SDK cần RPC provider để gọi contract (getKmsSigners), 
-    // nhưng RPC endpoint không hỗ trợ CORS từ browser
+    
+    // Chỉ load WASM, không tạo instance
+    // initSDK() có thể tự động tạo instance nếu có RPC URL trong SepoliaConfig
+    // Nên chúng ta chỉ load SDK, không gọi initSDK() để tránh CORS
     // Instance sẽ được tạo khi user connect wallet (trong initializeFHEVM)
-    // Khi đó sẽ dùng MetaMask provider (window.ethereum), không bị CORS
+    
+    try {
+      await initSDK();
+      console.log('✅ FHEVM WASM auto-loaded');
+    } catch (error: any) {
+      // Nếu initSDK() gặp CORS error, bỏ qua (không phải lỗi nghiêm trọng)
+      if (error?.message?.includes('CORS') || error?.message?.includes('Failed to fetch')) {
+        console.warn('⚠️ FHEVM WASM load skipped (CORS - will init when wallet connects):', error.message);
+      } else {
+        throw error; // Re-throw nếu là lỗi khác
+      }
+    }
     
     autoInitialized = true;
-    console.log('✅ FHEVM SDK WASM loaded (instance will be created when wallet connects)');
+    console.log('✅ FHEVM SDK ready (instance will be created when wallet connects)');
     
     return true;
   } catch (error) {
